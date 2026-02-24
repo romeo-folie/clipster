@@ -211,3 +211,73 @@ func (c *Client) DaemonStatus() (*DaemonStatus, error) {
 	}
 	return &status, nil
 }
+
+// Pin sends a pin command for the given entry ID.
+func (c *Client) Pin(entryID string) error {
+	cmd := Command{
+		Version: ProtocolVersion,
+		Command: "pin",
+		Params:  Params{EntryID: &entryID},
+	}
+	_, err := c.Send(cmd)
+	return err
+}
+
+// Unpin sends an unpin command for the given entry ID.
+func (c *Client) Unpin(entryID string) error {
+	cmd := Command{
+		Version: ProtocolVersion,
+		Command: "unpin",
+		Params:  Params{EntryID: &entryID},
+	}
+	_, err := c.Send(cmd)
+	return err
+}
+
+// Delete sends a delete command for the given entry ID.
+func (c *Client) Delete(entryID string) error {
+	cmd := Command{
+		Version: ProtocolVersion,
+		Command: "delete",
+		Params:  Params{EntryID: &entryID},
+	}
+	_, err := c.Send(cmd)
+	return err
+}
+
+// Transform applies a named transform to an entry and returns the result.
+func (c *Client) Transform(entryID, transform string) (string, error) {
+	cmd := Command{
+		Version: ProtocolVersion,
+		Command: "transform",
+		Params:  Params{EntryID: &entryID, Transform: &transform},
+	}
+	resp, err := c.Send(cmd)
+	if err != nil {
+		return "", err
+	}
+	var data struct {
+		Result string `json:"result"`
+	}
+	if err := json.Unmarshal(*resp.Data, &data); err != nil {
+		return "", fmt.Errorf("parse transform result: %w", err)
+	}
+	return data.Result, nil
+}
+
+// Clear sends a clear command to delete all non-pinned history entries.
+// Returns the count of deleted entries.
+func (c *Client) Clear() (int, error) {
+	cmd := Command{Version: ProtocolVersion, Command: "clear"}
+	resp, err := c.Send(cmd)
+	if err != nil {
+		return 0, err
+	}
+	var data struct {
+		Deleted int `json:"deleted"`
+	}
+	if err := json.Unmarshal(*resp.Data, &data); err != nil {
+		return 0, fmt.Errorf("parse clear result: %w", err)
+	}
+	return data.Deleted, nil
+}

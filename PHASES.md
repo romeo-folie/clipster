@@ -54,7 +54,7 @@ If either fails: evaluate alternatives before continuing. Escalate to Alfred.
 
 ## Phase 2 — Full CLI / TUI
 
-**Status:** Pending Phase 1  
+**Status:** Code complete — PR open, awaiting merge  
 **Weeks:** 6–9
 
 - Bubble Tea TUI: inline filter, keybindings, type icons, source display, pin/unpin, delete
