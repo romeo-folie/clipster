@@ -6,7 +6,7 @@ Source of truth: PRD §13. This document tracks phase status and decisions.
 
 ## Phase 0 — Prototype Gate
 
-**Status:** In Progress  
+**Status:** Code complete — awaiting Romeo's manual gate  
 **Week:** 1  
 **Objective:** De-risk the daemon architecture before writing production code.
 
