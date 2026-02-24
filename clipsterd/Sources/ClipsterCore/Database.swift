@@ -1,3 +1,4 @@
+import AppKit
 import CryptoKit
 import Foundation
 import GRDB
@@ -164,9 +165,24 @@ public final class ClipsterDatabase {
                     hash,
                 ]
             )
+
+            // Image thumbnail — PRD §7.1 / AC-CAP-04
+            if entry.contentType == .image, let rawData = entry.imageData {
+                if let thumb = generateThumbnail(from: rawData) {
+                    try db.execute(
+                        sql: "INSERT OR REPLACE INTO thumbnails (entry_id, data) VALUES (?, ?)",
+                        arguments: [entry.id, thumb]
+                    )
+                } else {
+                    logger.warn("Thumbnail generation failed for entry \(entry.id) — storing entry without thumbnail")
+                }
+            }
         }
 
         logger.debug("Inserted entry \(entry.id) [\(entry.contentType.rawValue)]")
+
+        // History pruning — PRD §7.2 / AC-DB-01 + AC-DB-02
+        try pruneIfNeeded()
     }
 
     // MARK: - Reads
@@ -216,6 +232,18 @@ public final class ClipsterDatabase {
         }
     }
 
+    /// Fetch thumbnail JPEG data for an entry, or nil if no thumbnail exists.
+    public func thumbnail(for entryID: String) throws -> Data? {
+        try dbQueue.read { db in
+            let row = try Row.fetchOne(
+                db,
+                sql: "SELECT data FROM thumbnails WHERE entry_id = ?",
+                arguments: [entryID]
+            )
+            return row?["data"] as? Data
+        }
+    }
+
     /// Find a single entry by ID, or nil if not found.
     public func findEntry(id: String) throws -> StoredEntry? {
         try dbQueue.read { db in
@@ -253,6 +281,122 @@ public final class ClipsterDatabase {
             try db.execute(sql: "DELETE FROM entries WHERE is_pinned = 0")
             return db.changesCount
         }
+    }
+
+    // MARK: - Pruning
+
+    /// Enforce entry_limit and db_size_cap_mb after each insert.
+    /// Pinned entries are never pruned (PRD §7.2).
+    private func pruneIfNeeded() throws {
+        let limit = clipsterConfig.entryLimit
+        let sizeCap = clipsterConfig.dbSizeCapMB
+
+        var deletedTotal = 0
+
+        // --- Count-based pruning ---
+        if limit > 0 {
+            let count = try dbQueue.read { db in
+                try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE is_pinned = 0") ?? 0
+            }
+            let excess = count - limit
+            if excess > 0 {
+                let deleted = try dbQueue.write { db -> Int in
+                    try db.execute(sql: """
+                        DELETE FROM entries
+                        WHERE id IN (
+                            SELECT id FROM entries
+                            WHERE is_pinned = 0
+                            ORDER BY created_at ASC
+                            LIMIT ?
+                        )
+                    """, arguments: [excess])
+                    return db.changesCount
+                }
+                deletedTotal += deleted
+                logger.debug("Pruned \(deleted) entries (count limit: \(limit))")
+            }
+        }
+
+        // --- Size-based pruning ---
+        if sizeCap > 0 {
+            let capBytes = Int64(sizeCap) * 1024 * 1024
+            while true {
+                let dbSize = try dbQueue.read { db -> Int64 in
+                    let pageCount = try Int64.fetchOne(db, sql: "PRAGMA page_count") ?? 0
+                    let pageSize  = try Int64.fetchOne(db, sql: "PRAGMA page_size")  ?? 4096
+                    return pageCount * pageSize
+                }
+                guard dbSize > capBytes else { break }
+
+                let deleted = try dbQueue.write { db -> Int in
+                    try db.execute(sql: """
+                        DELETE FROM entries
+                        WHERE id IN (
+                            SELECT id FROM entries
+                            WHERE is_pinned = 0
+                            ORDER BY created_at ASC
+                            LIMIT 10
+                        )
+                    """)
+                    return db.changesCount
+                }
+                if deleted == 0 { break }  // only pinned entries left — can't shrink further
+                deletedTotal += deleted
+            }
+            if deletedTotal > 0 {
+                logger.debug("Pruned \(deletedTotal) entries total (size cap: \(sizeCap) MB)")
+            }
+        }
+
+        // --- VACUUM after bulk deletes (threshold: ≥ 10 deletions) ---
+        if deletedTotal >= 10 {
+            try dbQueue.write { db in try db.execute(sql: "PRAGMA incremental_vacuum(100)") }
+        }
+    }
+
+    // MARK: - Thumbnail generation
+
+    /// Generate a JPEG thumbnail from raw image data.
+    /// - Returns: JPEG data ≤ 2MB with width ≤ 400px, or nil on failure.
+    private func generateThumbnail(from data: Data) -> Data? {
+        guard let image = NSImage(data: data) else { return nil }
+
+        let maxWidth: CGFloat = 400
+        let originalSize = image.size
+        guard originalSize.width > 0, originalSize.height > 0 else { return nil }
+
+        let targetSize: NSSize
+        if originalSize.width > maxWidth {
+            let scale = maxWidth / originalSize.width
+            targetSize = NSSize(width: maxWidth, height: originalSize.height * scale)
+        } else {
+            targetSize = originalSize
+        }
+
+        let resized = NSImage(size: targetSize)
+        resized.lockFocus()
+        image.draw(
+            in: NSRect(origin: .zero, size: targetSize),
+            from: NSRect(origin: .zero, size: originalSize),
+            operation: .copy,
+            fraction: 1.0
+        )
+        resized.unlockFocus()
+
+        guard let tiff = resized.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
+
+        let maxBytes = 2 * 1024 * 1024
+        // Try decreasing quality until ≤ 2MB
+        for quality in [0.75, 0.5, 0.3, 0.1] {
+            if let jpeg = bitmap.representation(
+                using: .jpeg,
+                properties: [.compressionFactor: NSNumber(value: quality)]
+            ), jpeg.count <= maxBytes {
+                return jpeg
+            }
+        }
+        return nil  // Cannot fit in 2MB even at lowest quality
     }
 
     // MARK: - Helpers

@@ -42,15 +42,28 @@ build-universal: ## Build universal binary (arm64 + x86_64)
 
 # ─── Test ─────────────────────────────────────────────────────────────────────
 
+# XCTest requires the full Xcode toolchain, not just Command Line Tools.
+XCODE_DEVELOPER_DIR ?= /Applications/Xcode.app/Contents/Developer
+
 .PHONY: test
-test: ## Run all Swift tests
-	@echo "→ Running tests..."
-	cd clipsterd && swift test
+test: ## Run all Swift tests (requires Xcode.app)
+	@echo "→ Running Swift tests..."
+	cd clipsterd && DEVELOPER_DIR=$(XCODE_DEVELOPER_DIR) swift test
+	@echo "→ Running Go tests..."
+	cd clipster-client && go test ./...
 	@echo "✓ All tests passed"
 
+.PHONY: test-swift
+test-swift: ## Run Swift tests only
+	cd clipsterd && DEVELOPER_DIR=$(XCODE_DEVELOPER_DIR) swift test
+
+.PHONY: test-go
+test-go: ## Run Go tests only
+	cd clipster-client && go test ./...
+
 .PHONY: test-verbose
-test-verbose: ## Run tests with verbose output
-	cd clipsterd && swift test --verbose
+test-verbose: ## Run Swift tests with verbose output
+	cd clipsterd && DEVELOPER_DIR=$(XCODE_DEVELOPER_DIR) swift test --verbose
 
 # ─── Install ──────────────────────────────────────────────────────────────────
 

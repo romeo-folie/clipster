@@ -22,13 +22,14 @@ public enum ContentClassifier {
         // Plain-text sub-types (url, code, colour, email, phone) follow.
 
         // 1. Image
-        if let imageData = imageData(from: pasteboard) {
+        if let imgData = imageData(from: pasteboard) {
             return ClipboardEntry(
-                content: imageData,
+                content: "[image]",      // placeholder text; thumbnail stored in DB
                 contentType: .image,
                 sourceBundle: sourceApp.bundleID,
                 sourceName: sourceApp.name,
-                sourceConfidence: sourceApp.confidence
+                sourceConfidence: sourceApp.confidence,
+                imageData: imgData       // raw data → thumbnail generated in Database.insert
             )
         }
 
@@ -217,11 +218,14 @@ public enum ContentClassifier {
 
     // MARK: - UTI-based detectors
 
-    private static func imageData(from pb: NSPasteboard) -> String? {
-        // We don't store raw image data as String — return a marker and handle
-        // the actual JPEG thumbnail creation in ClipboardMonitor (Phase 1 image handling).
-        // Returns nil here; image path handled separately.
-        return nil  // Placeholder — full image handling in ClipboardMonitor.capture()
+    private static func imageData(from pb: NSPasteboard) -> Data? {
+        // Prefer TIFF (NSPasteboard native), fall back to PNG, then any NSImage-readable UTI.
+        if let tiff = pb.data(forType: .tiff), !tiff.isEmpty { return tiff }
+        if let png  = pb.data(forType: NSPasteboard.PasteboardType("public.png")), !png.isEmpty { return png }
+        for uti in NSImage.imageTypes {
+            if let data = pb.data(forType: NSPasteboard.PasteboardType(uti)), !data.isEmpty { return data }
+        }
+        return nil
     }
 
     private static func fileURL(from pb: NSPasteboard) -> String? {

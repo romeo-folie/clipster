@@ -9,10 +9,10 @@ final class DatabaseTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeDB() throws -> ClipsterDatabase {
+    private func makeDB(config: ClipsterConfig = .default) throws -> ClipsterDatabase {
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("clipster-test-\(UUID().uuidString).db")
-        return try ClipsterDatabase(url: tmp)
+        return try ClipsterDatabase(url: tmp, config: config)
     }
 
     private func entry(
@@ -133,5 +133,69 @@ final class DatabaseTests: XCTestCase {
         let stored = try db.latestEntry()
         XCTAssertNotNil(stored?.contentHash)
         XCTAssertFalse(stored?.contentHash.isEmpty ?? true)
+    }
+
+    // MARK: - Pruning: entry_limit
+
+    func testEntryLimitPrunesOldestUnpinned() throws {
+        let config = ClipsterConfig(
+            entryLimit: 3,
+            dbSizeCapMB: 0,     // disable size pruning for this test
+            suppressBundles: [],
+            logLevel: .error
+        )
+        let db = try makeDB(config: config)
+
+        try db.insert(entry(content: "A"))
+        try db.insert(entry(content: "B"))
+        try db.insert(entry(content: "C"))
+        try db.insert(entry(content: "D"))  // triggers prune — A should be removed
+
+        XCTAssertEqual(try db.entryCount(), 3)
+        let entries = try db.list(limit: 10)
+        let contents = entries.map(\.content)
+        XCTAssertFalse(contents.contains("A"), "Oldest entry 'A' should be pruned")
+        XCTAssertTrue(contents.contains("D"), "Newest entry 'D' must be retained")
+    }
+
+    func testEntryLimitZeroMeansNoCountPruning() throws {
+        let config = ClipsterConfig(
+            entryLimit: 0,      // no count limit
+            dbSizeCapMB: 0,
+            suppressBundles: [],
+            logLevel: .error
+        )
+        let db = try makeDB(config: config)
+
+        for i in 0..<20 {
+            try db.insert(entry(content: "item-\(i)"))
+        }
+        XCTAssertEqual(try db.entryCount(), 20)
+    }
+
+    func testPinnedEntriesSurvivePruning() throws {
+        let config = ClipsterConfig(
+            entryLimit: 2,
+            dbSizeCapMB: 0,
+            suppressBundles: [],
+            logLevel: .error
+        )
+        let db = try makeDB(config: config)
+
+        try db.insert(entry(content: "pinned-item"))
+        let pinned = try db.latestEntry()
+        XCTAssertNotNil(pinned)
+        try db.setPin(id: pinned!.id, pinned: true)
+
+        // Insert 3 more to trigger pruning past the limit
+        try db.insert(entry(content: "X"))
+        try db.insert(entry(content: "Y"))
+        try db.insert(entry(content: "Z"))
+
+        // Pinned entry must survive
+        let all = try db.list(limit: 100)
+        let pins = try db.listPinned()
+        XCTAssertEqual(pins.count, 1)
+        XCTAssertTrue(all.map(\.content).contains("Z") || pins.map(\.content).contains("pinned-item"))
     }
 }
