@@ -75,8 +75,13 @@ public final class ConfigLoader {
     /// Load config from `configURL`, creating the file with defaults if absent.
     /// Never throws — returns `.default` and logs a warning on any error.
     public static func load() -> ClipsterConfig {
-        let url = configURL
+        load(at: configURL)
+    }
 
+    /// Load config from `url`, creating the file with defaults if absent.
+    /// Never throws — returns `.default` and logs a warning on any error.
+    /// Pass a custom URL to enable testing without touching the real config file.
+    public static func load(at url: URL) -> ClipsterConfig {
         if !FileManager.default.fileExists(atPath: url.path) {
             do {
                 try createDefault(at: url)

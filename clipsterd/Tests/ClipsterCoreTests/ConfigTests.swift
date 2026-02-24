@@ -162,7 +162,7 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(config.entryLimit, 100)
     }
 
-    // MARK: - File creation
+    // MARK: - File creation (unit)
 
     func testCreatesDefaultFileIfAbsent() throws {
         let tmp = FileManager.default.temporaryDirectory
@@ -178,6 +178,81 @@ final class ConfigTests: XCTestCase {
 
         // Cleanup
         try? FileManager.default.removeItem(at: tmp.deletingLastPathComponent())
+    }
+
+    // MARK: - First-run integration (load(at:))
+
+    /// Verifies: when no config file exists, load(at:) creates it and returns the default config.
+    func testFirstRunCreatesFileAndReturnsDefaults() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clipster-firstrun-\(UUID().uuidString)", isDirectory: true)
+        let url = dir.appendingPathComponent("config.toml")
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path),
+                       "Pre-condition: file must not exist before first run")
+
+        let config = ConfigLoader.load(at: url)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path),
+                      "load(at:) must create the config file on first run")
+        XCTAssertEqual(config, ClipsterConfig.default,
+                       "First-run config must equal the static default")
+    }
+
+    /// Verifies: the file created on first run contains valid TOML that round-trips to defaults.
+    func testFirstRunFileContentIsValidTOML() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clipster-firstrun-toml-\(UUID().uuidString)", isDirectory: true)
+        let url = dir.appendingPathComponent("config.toml")
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        _ = ConfigLoader.load(at: url)
+
+        let raw = try String(contentsOf: url, encoding: .utf8)
+        let reparsed = ConfigLoader.parse(raw)
+        XCTAssertEqual(reparsed, ClipsterConfig.default,
+                       "Default TOML written on first run must parse back to ClipsterConfig.default")
+    }
+
+    /// Verifies: when a valid config file already exists, load(at:) reads and honours its values.
+    func testLoadReadsExistingFile() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clipster-existing-\(UUID().uuidString)", isDirectory: true)
+        let url = dir.appendingPathComponent("config.toml")
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let custom = """
+        [history]
+        entry_limit = 100
+        db_size_cap_mb = 250
+
+        [daemon]
+        log_level = "debug"
+
+        [privacy]
+        suppress_bundles = ["com.foo.bar"]
+        """
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try custom.write(to: url, atomically: true, encoding: .utf8)
+
+        let config = ConfigLoader.load(at: url)
+        XCTAssertEqual(config.entryLimit, 100)
+        XCTAssertEqual(config.dbSizeCapMB, 250)
+        XCTAssertEqual(config.logLevel, .debug)
+        XCTAssertEqual(config.suppressBundles, ["com.foo.bar"])
+    }
+
+    /// Verifies: load(at:) is idempotent — calling twice returns the same config.
+    func testLoadIsIdempotent() {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clipster-idempotent-\(UUID().uuidString)", isDirectory: true)
+        let url = dir.appendingPathComponent("config.toml")
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let first  = ConfigLoader.load(at: url)
+        let second = ConfigLoader.load(at: url)
+        XCTAssertEqual(first, second, "load(at:) must be idempotent")
     }
 
     // MARK: - Multi-line array
