@@ -6,7 +6,7 @@ Source of truth: PRD §13. This document tracks phase status and decisions.
 
 ## Phase 0 — Prototype Gate
 
-**Status:** Code complete — awaiting Romeo's manual gate  
+**Status:** ✅ Complete — gate passed (notarisation deferred)  
 **Week:** 1  
 **Objective:** De-risk the daemon architecture before writing production code.
 
@@ -40,7 +40,7 @@ If either fails: evaluate alternatives before continuing. Escalate to Alfred.
 
 ## Phase 1 — Core Daemon
 
-**Status:** Pending Phase 0 gate  
+**Status:** Code complete — PR open, awaiting Romeo review  
 **Weeks:** 2–5
 
 - Full clipboard monitoring: all content types, debounce, source attribution, deduplication, password manager suppression
@@ -77,6 +77,16 @@ If either fails: evaluate alternatives before continuing. Escalate to Alfred.
 - Full acceptance criteria pass (all ACs in PRD §10)
 - Performance validation (Apple Silicon + Intel targets)
 - Documentation: README, `clipster --help`, config file comments
+
+---
+
+### Known Phase 1 Gaps (documented — not blockers for PR)
+
+| Gap | Notes |
+|---|---|
+| Image thumbnail generation | `ContentClassifier.imageData()` returns nil — images are detected by UTI but not yet stored. JPEG thumbnail generation (thumbnails table) deferred to Phase 2. |
+| Transform `format_json` / `format_xml` | Not in PRD §7.4 transform list; only the 11 documented transforms are implemented. |
+| Entry count/size pruning | `history.entry_limit` and `db_size_cap_mb` are parsed from config and stored but pruning logic (vacuum, DELETE) not yet wired. Phase 2. |
 
 ---
 

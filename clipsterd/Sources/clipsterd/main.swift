@@ -3,23 +3,28 @@ import Foundation
 
 // ─── Version ─────────────────────────────────────────────────────────────────
 
-let version = "0.1.0-phase0"
+let version = "0.2.0-phase1"
 let pid = ProcessInfo.processInfo.processIdentifier
+
+// ─── Config ───────────────────────────────────────────────────────────────────
+// PRD §7.3.6 startup sequence: read config first, create defaults if missing.
+
+let config = ConfigLoader.load()
+logger.minimumLevel = config.logLevel
+logger.info("Config:  \(ConfigLoader.configURL.path)")
 
 // ─── Startup banner ───────────────────────────────────────────────────────────
 // PRD §7.3.5: log version, PID, config path, DB path, socket path on startup.
-// Phase 0: config and socket not yet implemented — noted explicitly.
 
 logger.info("clipsterd \(version) starting (PID \(pid))")
-logger.info("Config:  ~/.config/clipster/config.toml [not yet implemented — Phase 1]")
 logger.info("DB:      \(ClipsterDatabase.dbURL.path)")
-logger.info("Socket:  ~/Library/Application Support/Clipster/clipster.sock [not yet implemented — Phase 1]")
+logger.info("Socket:  \(IPCPaths.socketURL.path)")
 
 // ─── Database ─────────────────────────────────────────────────────────────────
 
 let database: ClipsterDatabase
 do {
-    database = try ClipsterDatabase()
+    database = try ClipsterDatabase(config: config)
 } catch {
     logger.error("Failed to open database: \(error)")
     exit(1)
@@ -27,7 +32,7 @@ do {
 
 // ─── Clipboard monitor ────────────────────────────────────────────────────────
 
-let monitor = ClipboardMonitor { entry in
+let monitor = ClipboardMonitor(config: config) { entry in
     do {
         try database.insert(entry)
     } catch {
@@ -37,6 +42,16 @@ let monitor = ClipboardMonitor { entry in
 
 monitor.start()
 logger.info("Clipboard monitor started — poll: \(Int(monitor.pollInterval * 1000))ms, debounce: \(Int(monitor.debounceDelay * 1000))ms")
+
+// ─── IPC server ───────────────────────────────────────────────────────────────
+
+let ipcServer = IPCServer(database: database)
+do {
+    try ipcServer.start()
+} catch {
+    logger.error("Failed to start IPC server: \(error)")
+    // Non-fatal in Phase 1 — daemon continues without IPC, CLI falls back to SQLite.
+}
 
 // ─── Signal handling ──────────────────────────────────────────────────────────
 // PRD §7.3.7 shutdown sequence:
@@ -55,8 +70,10 @@ signal(SIGINT, SIG_IGN)
 let sigSrc = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
 sigSrc.setEventHandler {
     logger.info("Received SIGTERM — shutting down")
-    monitor.stop()
-    // DB closes when `database` is deallocated; GRDB flushes the write queue.
+    // PRD §7.3.7 shutdown sequence:
+    ipcServer.stop()      // 1. Stop accepting connections, remove socket file
+    monitor.stop()         // 2. Stop clipboard monitor
+    // 3. DB closes on dealloc; GRDB flushes the write queue before closing
     logger.info("clipsterd stopped cleanly")
     exit(0)
 }
@@ -65,6 +82,7 @@ sigSrc.resume()
 let intSrc = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
 intSrc.setEventHandler {
     logger.info("Received SIGINT — shutting down")
+    ipcServer.stop()
     monitor.stop()
     logger.info("clipsterd stopped cleanly")
     exit(0)
