@@ -33,6 +33,10 @@ public final class ClipboardMonitor {
         qos: .utility
     )
 
+    // MARK: - Config
+
+    private let config: ClipsterConfig
+
     // MARK: - Callback
 
     /// Called on `monitorQueue` when a clipboard change is committed (post-debounce).
@@ -41,7 +45,8 @@ public final class ClipboardMonitor {
 
     // MARK: - Init
 
-    public init(onChange: @escaping (ClipboardEntry) -> Void) {
+    public init(config: ClipsterConfig = .default, onChange: @escaping (ClipboardEntry) -> Void) {
+        self.config = config
         self.lastChangeCount = NSPasteboard.general.changeCount
         self.onChange = onChange
     }
@@ -90,54 +95,88 @@ public final class ClipboardMonitor {
         guard current != lastChangeCount else { return }
         lastChangeCount = current
 
+        // Capture frontmost app at detection time (start of debounce window).
+        // source_confidence is 'high' if it doesn't change before capture() fires.
+        // NSWorkspace must be accessed on main thread.
+        let appSnapshot = DispatchQueue.main.sync {
+            NSWorkspace.shared.frontmostApplication
+        }
         // Cancel any pending debounce and schedule a new one.
         debounceWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            self?.capture()
+            self?.capture(detectedApp: appSnapshot)
         }
         debounceWorkItem = work
         monitorQueue.asyncAfter(deadline: .now() + debounceDelay, execute: work)
     }
 
-    private func capture() {
+    private func capture(detectedApp: NSRunningApplication?) {
         // Called on monitorQueue after debounce window expires.
-        let pb = NSPasteboard.general
 
-        // Phase 0: plain text only.
-        // Phase 1 will expand to all content types in PRD §7.1 (rich-text, image, url, file, code, colour, email, phone).
-        guard let content = pb.string(forType: .string), !content.isEmpty else {
-            logger.debug("Pasteboard change detected but no plain-text content — skipping")
+        // Get frontmost app at debounce expiry for source_confidence determination.
+        let appAtCapture = DispatchQueue.main.sync {
+            NSWorkspace.shared.frontmostApplication
+        }
+
+        // source_confidence: 'high' if app hasn't changed since detection; 'low' if it has.
+        let confidence: SourceConfidence = (detectedApp?.bundleIdentifier == appAtCapture?.bundleIdentifier)
+            ? .high : .low
+
+        // Password manager suppression — PRD §7.1.
+        // Use the app at detection time (the app that triggered the copy).
+        if let bundleID = detectedApp?.bundleIdentifier,
+           config.suppressBundles.contains(bundleID) {
+            logger.debug("Suppressed entry from \(bundleID)")
             return
         }
 
-        let entry = ClipboardEntry(
-            content: content,
-            contentType: .plainText
+        let sourceAttribution = SourceAttribution(
+            bundleID: detectedApp?.bundleIdentifier,
+            name: detectedApp?.localizedName,
+            confidence: confidence
         )
-        logger.debug("Captured: \(content.prefix(60).replacingOccurrences(of: "\n", with: "↵"))")
+
+        // Classify pasteboard contents using ContentClassifier (PRD §7.1 — all 9 types).
+        guard let entry = ContentClassifier.classify(
+            pasteboard: .general,
+            sourceApp: sourceAttribution
+        ) else {
+            logger.debug("Pasteboard change detected but no supported content — skipping")
+            return
+        }
+
+        logger.debug("Captured [\(entry.contentType.rawValue)] from \(detectedApp?.localizedName ?? "unknown"): \(entry.content.prefix(60).replacingOccurrences(of: "\n", with: "↵"))")
         onChange(entry)
     }
 }
 
 // MARK: - ClipboardEntry
 
-/// A captured clipboard snapshot. Phase 0 carries only content and type.
-/// Phase 1 adds source attribution, source_confidence, and full content type detection.
+/// A captured clipboard snapshot.
 public struct ClipboardEntry {
     public let id: String
     public let content: String
     public let contentType: ContentType
+    public let sourceBundle: String?
+    public let sourceName: String?
+    public let sourceConfidence: SourceConfidence
     public let capturedAt: Date
 
     public init(
         id: String = UUID().uuidString,
         content: String,
         contentType: ContentType,
+        sourceBundle: String? = nil,
+        sourceName: String? = nil,
+        sourceConfidence: SourceConfidence = .high,
         capturedAt: Date = Date()
     ) {
         self.id = id
         self.content = content
         self.contentType = contentType
+        self.sourceBundle = sourceBundle
+        self.sourceName = sourceName
+        self.sourceConfidence = sourceConfidence
         self.capturedAt = capturedAt
     }
 }

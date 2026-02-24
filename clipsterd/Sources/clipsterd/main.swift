@@ -3,23 +3,28 @@ import Foundation
 
 // ─── Version ─────────────────────────────────────────────────────────────────
 
-let version = "0.1.0-phase0"
+let version = "0.2.0-phase1"
 let pid = ProcessInfo.processInfo.processIdentifier
+
+// ─── Config ───────────────────────────────────────────────────────────────────
+// PRD §7.3.6 startup sequence: read config first, create defaults if missing.
+
+let config = ConfigLoader.load()
+logger.minimumLevel = config.logLevel
+logger.info("Config:  \(ConfigLoader.configURL.path)")
 
 // ─── Startup banner ───────────────────────────────────────────────────────────
 // PRD §7.3.5: log version, PID, config path, DB path, socket path on startup.
-// Phase 0: config and socket not yet implemented — noted explicitly.
 
 logger.info("clipsterd \(version) starting (PID \(pid))")
-logger.info("Config:  ~/.config/clipster/config.toml [not yet implemented — Phase 1]")
 logger.info("DB:      \(ClipsterDatabase.dbURL.path)")
-logger.info("Socket:  ~/Library/Application Support/Clipster/clipster.sock [not yet implemented — Phase 1]")
+logger.info("Socket:  ~/Library/Application Support/Clipster/clipster.sock [Phase 1 — IPC]")
 
 // ─── Database ─────────────────────────────────────────────────────────────────
 
 let database: ClipsterDatabase
 do {
-    database = try ClipsterDatabase()
+    database = try ClipsterDatabase(config: config)
 } catch {
     logger.error("Failed to open database: \(error)")
     exit(1)
@@ -27,7 +32,7 @@ do {
 
 // ─── Clipboard monitor ────────────────────────────────────────────────────────
 
-let monitor = ClipboardMonitor { entry in
+let monitor = ClipboardMonitor(config: config) { entry in
     do {
         try database.insert(entry)
     } catch {

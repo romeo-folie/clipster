@@ -32,24 +32,31 @@ public final class ClipsterDatabase {
 
     private let dbQueue: DatabaseQueue
 
+    // MARK: - Stored config
+
+    private let clipsterConfig: ClipsterConfig
+
     // MARK: - Init
 
     /// Opens (or creates) the SQLite database, applies migrations, and enables WAL.
-    /// Throws on any database error.
-    public init(url: URL? = nil) throws {
+    /// - Parameters:
+    ///   - url: Override DB path (used in tests). Defaults to the production path.
+    ///   - config: Parsed app config. Defaults to `.default`.
+    public init(url: URL? = nil, config: ClipsterConfig = .default) throws {
+        self.clipsterConfig = config
         let target = url ?? ClipsterDatabase.dbURL
         try Self.ensureParentDirectory(for: target)
 
-        var config = Configuration()
-        config.label = "com.clipster.database"
+        var grdbConfig = Configuration()
+        grdbConfig.label = "com.clipster.database"
         // PRAGMA journal_mode=WAL must be set *outside* any transaction.
         // GRDB's prepareDatabase callback runs before migrations and before
         // any transaction is opened — the correct place for this pragma.
-        config.prepareDatabase { db in
+        grdbConfig.prepareDatabase { db in
             try db.execute(sql: "PRAGMA journal_mode=WAL")
         }
 
-        dbQueue = try DatabaseQueue(path: target.path, configuration: config)
+        dbQueue = try DatabaseQueue(path: target.path, configuration: grdbConfig)
         try applyMigrations()
         logger.info("Database opened at: \(target.path)")
     }
@@ -142,7 +149,7 @@ public final class ClipsterDatabase {
                          created_at, is_pinned, content_hash)
                     VALUES
                         (?, ?, ?, ?,
-                         NULL, NULL, 'high',
+                         ?, ?, ?,
                          ?, 0, ?)
                 """,
                 arguments: [
@@ -150,6 +157,9 @@ public final class ClipsterDatabase {
                     entry.contentType.rawValue,
                     entry.content,
                     preview,
+                    entry.sourceBundle,
+                    entry.sourceName,
+                    entry.sourceConfidence.rawValue,
                     createdAt,
                     hash,
                 ]
@@ -205,27 +215,27 @@ public struct StoredEntry {
     public let contentType: String
     public let content: String
     public let preview: String?
+    public let sourceBundle: String?
+    public let sourceName: String?
+    public let sourceConfidence: String
     public let createdAt: Int64
     public let isPinned: Bool
     public let contentHash: String
 
-    // Internal — only called from ClipsterDatabase.latestEntry() and future read methods.
+    // Internal — only called from ClipsterDatabase read methods.
     // Tests access StoredEntry via the public read API, never construct it directly.
     init(row: Row) {
-        // All NOT NULL columns use ?? fallbacks for defensive safety.
-        // In practice these will never be nil given the schema constraints.
-        id          = row["id"] ?? ""
-        contentType = row["content_type"] ?? ""
-        // content is declared BLOB in schema but stored as TEXT for plain-text entries.
-        // SQLite weak typing: GRDB reads it back as String correctly.
-        content     = row["content"] ?? ""
-        preview     = row["preview"]   // nullable column — String? is correct
-        // SQLite INTEGER maps to Int64 — explicit type annotation avoids platform-width
-        // ambiguity and makes the GRDB subscript resolve to the right overload.
+        id               = row["id"] ?? ""
+        contentType      = row["content_type"] ?? ""
+        content          = row["content"] ?? ""
+        preview          = row["preview"]
+        sourceBundle     = row["source_bundle"]
+        sourceName       = row["source_name"]
+        sourceConfidence = row["source_confidence"] ?? "high"
         let createdAtMs: Int64 = row["created_at"] ?? 0
-        createdAt   = createdAtMs
+        createdAt        = createdAtMs
         let pinnedInt: Int64 = row["is_pinned"] ?? 0
-        isPinned    = pinnedInt != 0
-        contentHash = row["content_hash"] ?? ""
+        isPinned         = pinnedInt != 0
+        contentHash      = row["content_hash"] ?? ""
     }
 }
