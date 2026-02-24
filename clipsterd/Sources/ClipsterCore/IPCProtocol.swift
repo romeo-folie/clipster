@@ -44,6 +44,13 @@ public struct IPCParams: Codable {
     public var entryID: String?
     public var transform: String?
 
+    public init(limit: Int? = nil, offset: Int? = nil, entryID: String? = nil, transform: String? = nil) {
+        self.limit     = limit
+        self.offset    = offset
+        self.entryID   = entryID
+        self.transform = transform
+    }
+
     public static let empty = IPCParams()
 
     enum CodingKeys: String, CodingKey {
@@ -148,6 +155,21 @@ public struct IPCEntry: Codable {
         sourceConfidence = entry.sourceConfidence
         createdAt        = entry.createdAt
         isPinned         = entry.isPinned
+    }
+
+    /// Memberwise init used by tests and GUI clients that construct entries directly.
+    public init(id: String, contentType: String, content: String, preview: String?,
+                sourceBundle: String?, sourceName: String?, sourceConfidence: String,
+                createdAt: Int64, isPinned: Bool) {
+        self.id               = id
+        self.contentType      = contentType
+        self.content          = content
+        self.preview          = preview
+        self.sourceBundle     = sourceBundle
+        self.sourceName       = sourceName
+        self.sourceConfidence = sourceConfidence
+        self.createdAt        = createdAt
+        self.isPinned         = isPinned
     }
 }
 

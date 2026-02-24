@@ -76,6 +76,24 @@ public final class ClipsterRuntime {
         logger.info("DB:      \(ClipsterDatabase.dbURL.path)")
         logger.info("Socket:  \(IPCPaths.socketURL.path)")
 
+        // PRD §14.1 — migration state logging
+        let migration = MigrationState.detect()
+        logger.info("Install mode: \(migration.installMode.rawValue), migration phase: \(migration.migrationPhase.rawValue)")
+        if migration.migrationPhase == .dual {
+            logger.warn("Dual install mode detected — both LaunchAgent plist and app-capable environment are active.")
+        }
+
+        // PRD §9 — permission preflight (informational; daemon continues on failure)
+        let caps = PermissionPreflight.run()
+        for line in caps.diagnostics {
+            logger.warn(line)
+        }
+        if caps.isReady {
+            logger.info("Permission preflight: OK")
+        } else {
+            logger.warn("Permission preflight: degraded — some capabilities are restricted. Clipboard monitoring may be affected.")
+        }
+
         switch options.mode {
         case .headless:
             logger.info("Starting in headless mode")
