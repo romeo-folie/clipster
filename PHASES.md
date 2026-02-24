@@ -40,7 +40,7 @@ If either fails: evaluate alternatives before continuing. Escalate to Alfred.
 
 ## Phase 1 — Core Daemon
 
-**Status:** Code complete — PR open, awaiting Romeo review  
+**Status:** ✅ Complete  
 **Weeks:** 2–5
 
 - Full clipboard monitoring: all content types, debounce, source attribution, deduplication, password manager suppression
@@ -54,7 +54,7 @@ If either fails: evaluate alternatives before continuing. Escalate to Alfred.
 
 ## Phase 2 — Full CLI / TUI
 
-**Status:** Code complete — PR open, awaiting merge  
+**Status:** ✅ Complete  
 **Weeks:** 6–9
 
 - Bubble Tea TUI: inline filter, keybindings, type icons, source display, pin/unpin, delete
@@ -68,7 +68,7 @@ If either fails: evaluate alternatives before continuing. Escalate to Alfred.
 
 ## Phase 3 — Install Script, Config Polish, Performance
 
-**Status:** Pending Phase 2  
+**Status:** ✅ Complete  
 **Weeks:** 10–12
 
 - `install.sh` and `uninstall.sh` (full PRD §7.8 spec)

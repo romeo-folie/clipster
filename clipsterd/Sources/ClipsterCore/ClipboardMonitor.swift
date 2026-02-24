@@ -161,6 +161,9 @@ public struct ClipboardEntry {
     public let sourceName: String?
     public let sourceConfidence: SourceConfidence
     public let capturedAt: Date
+    /// Raw image data for `.image` entries. Nil for all other content types.
+    /// The database layer generates and stores a JPEG thumbnail from this data.
+    public let imageData: Data?
 
     public init(
         id: String = UUID().uuidString,
@@ -169,7 +172,8 @@ public struct ClipboardEntry {
         sourceBundle: String? = nil,
         sourceName: String? = nil,
         sourceConfidence: SourceConfidence = .high,
-        capturedAt: Date = Date()
+        capturedAt: Date = Date(),
+        imageData: Data? = nil
     ) {
         self.id = id
         self.content = content
@@ -178,6 +182,7 @@ public struct ClipboardEntry {
         self.sourceName = sourceName
         self.sourceConfidence = sourceConfidence
         self.capturedAt = capturedAt
+        self.imageData = imageData
     }
 }
 
