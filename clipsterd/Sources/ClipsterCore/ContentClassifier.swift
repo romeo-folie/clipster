@@ -83,7 +83,7 @@ public enum ContentClassifier {
 
     // MARK: - URL detection
 
-    static func isURL(_ text: String) -> Bool {
+    public static func isURL(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let url = URL(string: trimmed),
               let scheme = url.scheme,
@@ -157,7 +157,7 @@ public enum ContentClassifier {
     //
     // Fires when ≥2 of 5 signals are detected. Best-effort; false positives accepted.
 
-    static func isCode(_ text: String) -> Bool {
+    public static func isCode(_ text: String) -> Bool {
         var signals = 0
 
         // Signal 1: language keywords

@@ -104,7 +104,7 @@ public final class ConfigLoader {
     /// Handles sections, integer values, quoted string values, single-line and
     /// multi-line inline string arrays. Any unrecognised key or invalid value is
     /// ignored (logs a warning; default used).
-    static func parse(_ toml: String) -> ClipsterConfig {
+    public static func parse(_ toml: String) -> ClipsterConfig {
         var entryLimit: Int? = nil
         var dbSizeCapMB: Int? = nil
         var suppressBundles: [String]? = nil
@@ -163,7 +163,13 @@ public final class ConfigLoader {
                 }
 
             case ("privacy", "suppress_bundles"):
-                suppressBundles = parseStringArray(rawValue)
+                // Only attempt array parse if value starts with '['.
+                // A non-array value (e.g. a bare string) is invalid — log and use default.
+                if rawValue.trimmingCharacters(in: .whitespaces).hasPrefix("[") {
+                    suppressBundles = parseStringArray(rawValue)
+                } else {
+                    logger.warn("Config: suppress_bundles is not an array: '\(rawValue)' — using default.")
+                }
 
             case ("daemon", "log_level"):
                 let s = unquote(rawValue)
@@ -190,7 +196,7 @@ public final class ConfigLoader {
 
     /// Parse an inline TOML string array: `["a", "b", "c"]`
     /// Returns an empty array for malformed input.
-    static func parseStringArray(_ raw: String) -> [String] {
+    public static func parseStringArray(_ raw: String) -> [String] {
         let trimmed = raw.trimmingCharacters(in: .whitespaces)
         guard trimmed.hasPrefix("[") && trimmed.hasSuffix("]") else { return [] }
         let inner = String(trimmed.dropFirst().dropLast())
@@ -203,7 +209,7 @@ public final class ConfigLoader {
     /// Collapse multi-line TOML inline arrays into single logical lines.
     /// Input:  ["key = [", "  \"a\",", "  \"b\"", "]"]
     /// Output: ["key = [\"a\",\"b\"]"]
-    static func joinMultilineArrays(_ lines: [String]) -> [String] {
+    public static func joinMultilineArrays(_ lines: [String]) -> [String] {
         var result: [String] = []
         var accumulating = false
         var accumulated = ""
@@ -242,7 +248,7 @@ public final class ConfigLoader {
     }
 
     /// Strip surrounding double quotes from a TOML string value.
-    static func unquote(_ s: String) -> String {
+    public static func unquote(_ s: String) -> String {
         var result = s.trimmingCharacters(in: .whitespaces)
         if result.hasPrefix("\"") { result = String(result.dropFirst()) }
         if result.hasSuffix("\"") { result = String(result.dropLast()) }
@@ -251,7 +257,7 @@ public final class ConfigLoader {
 
     // MARK: - Default file creation
 
-    static func createDefault(at url: URL) throws {
+    public static func createDefault(at url: URL) throws {
         let dir = url.deletingLastPathComponent()
         try FileManager.default.createDirectory(
             at: dir,
@@ -263,7 +269,7 @@ public final class ConfigLoader {
 
     // MARK: - Default TOML content
 
-    static let defaultTOML = """
+    public static let defaultTOML = """
 # Clipster configuration
 # Changes take effect after: clipster daemon restart
 
