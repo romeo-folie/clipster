@@ -92,6 +92,12 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)/Contents/Developer"
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: clipster-client/go.mod
+          cache-dependency-path: clipster-client/go.sum
+
       - name: Resolve Swift packages
         working-directory: clipsterd
         run: swift package resolve
