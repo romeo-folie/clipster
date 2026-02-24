@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LaunchAgent plist for clipsterd.
+  PRD §7.3.2 — exact specification.
+
+  IMPORTANT: Before loading this plist, replace REPLACE_WITH_HOME with the
+  actual home directory path. The install script (scripts/install.sh, Phase 3)
+  does this automatically. For manual Phase 0 testing, run:
+
+    sed -e "s|REPLACE_WITH_HOME|$HOME|g" \
+        support/com.clipster.daemon.plist \
+        > ~/Library/LaunchAgents/com.clipster.daemon.plist
+
+  Then load with:
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.clipster.daemon.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.clipster.daemon</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/clipsterd</string>
+    </array>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/clipsterd.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/clipsterd.log</string>
+
+    <!--
+      HOME is set explicitly because launchd does not guarantee $HOME is set
+      in the agent environment on all macOS versions. clipsterd uses $HOME to
+      resolve ~/Library/Application Support/Clipster/ and
+      ~/.config/clipster/config.toml.
+    -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>REPLACE_WITH_HOME</string>
+    </dict>
+</dict>
+</plist>

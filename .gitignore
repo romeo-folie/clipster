@@ -1,0 +1,38 @@
+# Swift/Xcode
+.build/
+*.xcodeproj/
+*.xcworkspace/
+*.o
+*.d
+DerivedData/
+.swiftpm/
+
+# SPM resolved (commit this)
+# Package.resolved — committed intentionally
+
+# macOS
+.DS_Store
+*.DS_Store
+
+# Go
+clipster-client/vendor/
+*.test
+*.out
+
+# Certs / secrets (never commit)
+*.p12
+*.cer
+*.provisionprofile
+notarisation-creds.sh
+app-specific-password.txt
+
+# Build outputs
+dist/
+*.zip
+clipsterd-darwin-arm64
+clipsterd-darwin-x86_64
+clipster-darwin-arm64
+clipster-darwin-x86_64
+
+# Logs
+*.log

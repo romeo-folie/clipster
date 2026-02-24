@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened Runtime entitlements for clipsterd.
+
+  clipsterd runs with the hardened runtime enabled (required for notarisation).
+  Minimal entitlements — no special permissions beyond standard user-session access.
+
+  Notes:
+  - NSPasteboard access in a user LaunchAgent does not require a TCC entitlement
+    in most macOS versions. If macOS 14+ introduces a TCC prompt for clipboard
+    access in headless agents, Phase 1 must add an Info.plist with
+    NSPasteboardUsageDescription and potentially request the
+    com.apple.security.temporary-exception.sbpl entitlement.
+    Flag this during Phase 0 gate verification.
+
+  - No com.apple.security.network.client — clipsterd makes no network calls.
+  - No com.apple.security.files.user-selected.read-write — uses app-scoped paths only.
+  - No accessibility or automation entitlements.
+-->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+</dict>
+</plist>
