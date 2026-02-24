@@ -180,6 +180,57 @@ final class ConfigTests: XCTestCase {
         try? FileManager.default.removeItem(at: tmp.deletingLastPathComponent())
     }
 
+    /// AC-CFG-01: config created with defaults on fresh install contains all required fields.
+    func testCreatedConfigContainsAllRequiredFields() throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clipster-config-allkeys-\(UUID().uuidString)")
+            .appendingPathComponent("config.toml")
+        defer { try? FileManager.default.removeItem(at: tmp.deletingLastPathComponent()) }
+
+        try ConfigLoader.createDefault(at: tmp)
+        let content = try String(contentsOf: tmp, encoding: .utf8)
+
+        // All sections present
+        XCTAssertTrue(content.contains("[history]"), "Missing [history] section")
+        XCTAssertTrue(content.contains("[privacy]"), "Missing [privacy] section")
+        XCTAssertTrue(content.contains("[daemon]"), "Missing [daemon] section")
+
+        // All keys present
+        XCTAssertTrue(content.contains("entry_limit"), "Missing entry_limit key")
+        XCTAssertTrue(content.contains("db_size_cap_mb"), "Missing db_size_cap_mb key")
+        XCTAssertTrue(content.contains("suppress_bundles"), "Missing suppress_bundles key")
+        XCTAssertTrue(content.contains("log_level"), "Missing log_level key")
+
+        // Default password manager bundle IDs present
+        XCTAssertTrue(content.contains("com.1password.1password"), "Missing 1Password bundle ID")
+        XCTAssertTrue(content.contains("com.bitwarden.desktop"), "Missing Bitwarden bundle ID")
+
+        // All config fields parse correctly to expected defaults
+        let config = ConfigLoader.parse(content)
+        XCTAssertEqual(config.entryLimit, 500)
+        XCTAssertEqual(config.dbSizeCapMB, 500)
+        XCTAssertEqual(config.logLevel, .info)
+        XCTAssertEqual(config.suppressBundles.count, 4)
+    }
+
+    /// AC-CFG-01: createDefault is idempotent — calling it a second time does not throw
+    /// (the file already exists; callers guard with fileExists but createDefault itself must not corrupt it).
+    func testCreateDefaultIdempotent() throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clipster-config-idempotent-\(UUID().uuidString)")
+            .appendingPathComponent("config.toml")
+        defer { try? FileManager.default.removeItem(at: tmp.deletingLastPathComponent()) }
+
+        try ConfigLoader.createDefault(at: tmp)
+        let firstContent = try String(contentsOf: tmp, encoding: .utf8)
+
+        // Write again (simulates a race or double-call)
+        try ConfigLoader.createDefault(at: tmp)
+        let secondContent = try String(contentsOf: tmp, encoding: .utf8)
+
+        XCTAssertEqual(firstContent, secondContent)
+    }
+
     // MARK: - Multi-line array
 
     func testMultilineSupressBundlesParsed() {

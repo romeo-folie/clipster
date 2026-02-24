@@ -1,0 +1,101 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [main, "phase-*", "feat/*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Swift daemon (macOS arm64) ─────────────────────────────────────────────
+  clipsterd:
+    name: clipsterd (Swift, macOS)
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build clipsterd
+        working-directory: clipsterd
+        run: swift build -c release 2>&1
+
+      - name: Test ClipsterCore
+        working-directory: clipsterd
+        run: swift test --parallel 2>&1
+
+      - name: Upload daemon binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: clipsterd-darwin-arm64
+          path: clipsterd/.build/release/clipsterd
+          if-no-files-found: error
+
+  # ── Go CLI (darwin/arm64 + darwin/amd64) ──────────────────────────────────
+  clipster-cli:
+    name: clipster CLI (Go, ${{ matrix.goarch }})
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        goarch: [arm64, amd64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+
+      - name: Go version
+        run: go version
+
+      - name: Build clipster (${{ matrix.goarch }})
+        working-directory: clipster-client
+        env:
+          GOOS: darwin
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: go build -o clipster-darwin-${{ matrix.goarch }} ./cmd/clipster/
+
+      - name: Test
+        working-directory: clipster-client
+        # CGO_ENABLED=0 so tests run on the CI host regardless of arch
+        env:
+          CGO_ENABLED: "0"
+        run: go test ./... -v 2>&1
+
+      - name: Upload CLI binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: clipster-darwin-${{ matrix.goarch }}
+          path: clipster-client/clipster-darwin-${{ matrix.goarch }}
+          if-no-files-found: error
+
+  # ── Shell script lint ─────────────────────────────────────────────────────
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Lint install.sh
+        run: shellcheck scripts/install.sh
+
+      - name: Lint uninstall.sh
+        run: shellcheck scripts/uninstall.sh
+
+      - name: Lint sign.sh
+        run: shellcheck scripts/sign.sh || true  # not always present in CI
+
+      - name: Lint verify-phase0.sh
+        run: shellcheck scripts/verify-phase0.sh || true

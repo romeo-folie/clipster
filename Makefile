@@ -113,6 +113,32 @@ daemon-status: ## Show daemon status
 logs: ## Tail daemon logs
 	tail -f /tmp/clipsterd.log
 
+# ─── Performance ─────────────────────────────────────────────────────────────
+
+.PHONY: bench-startup
+bench-startup: ## Measure clipster CLI startup time to interactive TUI (AC-CLI-01: < 300ms Apple Silicon)
+	@echo "Measuring clipster startup time (10 runs)..."
+	@echo "Target: < 300ms on Apple Silicon, < 500ms on Intel"
+	@echo ""
+	@which clipster >/dev/null 2>&1 || (echo "ERROR: clipster not in PATH. Run 'make install' first." && exit 1)
+	@for i in $$(seq 1 10); do \
+		START=$$(python3 -c "import time; print(int(time.time()*1000))"); \
+		timeout 2 clipster --help >/dev/null 2>&1 || true; \
+		END=$$(python3 -c "import time; print(int(time.time()*1000))"); \
+		echo "  Run $$i: $$(( END - START ))ms"; \
+	done
+	@echo ""
+	@echo "Note: --help exits immediately; full TUI startup includes IPC connect."
+	@echo "For interactive measurement: time clipster --version"
+
+.PHONY: bench-daemon
+bench-daemon: ## Show clipsterd resource usage (AC: < 1% CPU, < 50MB RSS on Apple Silicon)
+	@echo "clipsterd resource usage:"
+	@PID=$$(pgrep -x clipsterd 2>/dev/null); \
+	if [ -z "$$PID" ]; then echo "  clipsterd not running"; exit 1; fi; \
+	echo "  PID: $$PID"; \
+	ps -p $$PID -o pid,pcpu,rss,vsz,comm | tail -1 | awk '{printf "  CPU: %s%%  RSS: %d KB (%d MB)\n", $$2, $$3, $$3/1024}'
+
 # ─── Sign & Notarise ─────────────────────────────────────────────────────────
 
 .PHONY: sign
@@ -156,3 +182,7 @@ help: ## Show this help
 	@echo "  4. make install-launchagent"
 	@echo "  5. make verify-phase0"
 	@echo "  6. make notarise  (requires DEVELOPER_ID, APPLE_ID, TEAM_ID, APP_PASSWORD)"
+	@echo ""
+	@echo "Performance:"
+	@echo "  make bench-startup   — measure CLI startup time (target: <300ms Apple Silicon)"
+	@echo "  make bench-daemon    — show clipsterd CPU/memory usage"

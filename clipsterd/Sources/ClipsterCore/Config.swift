@@ -265,13 +265,16 @@ public final class ConfigLoader {
 
     static let defaultTOML = """
 # Clipster configuration
+# Location: ~/.config/clipster/config.toml
 # Changes take effect after: clipster daemon restart
 
 [history]
-entry_limit = 500          # 100 | 500 | 1000 | 0 (no count limit)
-db_size_cap_mb = 500       # max DB size in MB: 100 | 250 | 500 | 1000
+entry_limit = 500          # Max clipboard entries to keep: 100 | 500 | 1000 | 0 (no count limit)
+db_size_cap_mb = 500       # Max database size in MB: 100 | 250 | 500 | 1000
 
 [privacy]
+# App bundle IDs whose clipboard activity is silently suppressed.
+# Clipboard content from these apps is never stored in history.
 suppress_bundles = [
   "com.1password.1password",
   "com.bitwarden.desktop",
@@ -280,6 +283,7 @@ suppress_bundles = [
 ]
 
 [daemon]
-log_level = "info"         # debug | info | warn | error
+log_level = "info"         # Daemon log verbosity: debug | info | warn | error
+                           # Log output → /tmp/clipsterd.log
 """
 }

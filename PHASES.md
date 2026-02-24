@@ -68,15 +68,30 @@ If either fails: evaluate alternatives before continuing. Escalate to Alfred.
 
 ## Phase 3 — Install Script, Config Polish, Performance
 
-**Status:** Pending Phase 2  
+**Status:** In progress (branch: phase-3-install-docs)  
 **Weeks:** 10–12
 
-- `install.sh` and `uninstall.sh` (full PRD §7.8 spec)
-- Checksum verification
-- Config file defaults on first run
-- Full acceptance criteria pass (all ACs in PRD §10)
-- Performance validation (Apple Silicon + Intel targets)
-- Documentation: README, `clipster --help`, config file comments
+### Issues
+- [#11](https://github.com/romeo-folie/clipster/issues/11) — `install.sh` + `uninstall.sh`
+- [#12](https://github.com/romeo-folie/clipster/issues/12) — Documentation
+- [#13](https://github.com/romeo-folie/clipster/issues/13) — Config defaults audit + tests
+- [#14](https://github.com/romeo-folie/clipster/issues/14) — Performance + CI
+
+### Deliverables
+- [x] `scripts/install.sh` — full PRD §7.8.1 (AC-INST-01–06, AC-INST-10)
+- [x] `scripts/uninstall.sh` — full PRD §7.8.2 (AC-INST-07–09)
+- [x] SHA-256 checksum verification in install script
+- [x] Config TOML enhanced with descriptive comments for all fields
+- [x] Config tests: AC-CFG-01 (all-keys present, idempotent create)
+- [x] `.github/workflows/build.yml` — Swift + Go CI, shellcheck
+- [x] Makefile: `bench-startup`, `bench-daemon` performance targets
+- [x] Top-level `README.md`
+- [x] `clipsterd/README.md` — architecture, components, data flow, schema
+- [x] `clipster-client/README.md` — architecture, components, state machine, wire format
+
+### Open Items
+- Intel Mac performance validation — requires physical Intel hardware or GitHub CI macOS Intel runner; noted as manual QA item.
+- Notarisation of release binaries — requires Developer ID certificate; documented in Makefile targets and `scripts/sign.sh`.
 
 ---
 
