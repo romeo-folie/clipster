@@ -169,12 +169,39 @@ public final class ClipsterDatabase {
         logger.debug("Inserted entry \(entry.id) [\(entry.contentType.rawValue)]")
     }
 
-    // MARK: - Reads (Phase 0 minimal — expanded in Phase 1)
+    // MARK: - Reads
 
-    /// Count of entries in history.
+    /// Count of all entries in history.
     public func entryCount() throws -> Int {
         try dbQueue.read { db in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries") ?? 0
+        }
+    }
+
+    /// Paginated history list, newest first. Excludes pinned entries (returned via `listPinned`).
+    public func list(limit: Int = 50, offset: Int = 0) throws -> [StoredEntry] {
+        try dbQueue.read { db in
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT * FROM entries
+                    ORDER BY created_at DESC
+                    LIMIT ? OFFSET ?
+                """,
+                arguments: [limit, offset]
+            )
+            return rows.map(StoredEntry.init)
+        }
+    }
+
+    /// All pinned entries, newest first.
+    public func listPinned() throws -> [StoredEntry] {
+        try dbQueue.read { db in
+            let rows = try Row.fetchAll(
+                db,
+                sql: "SELECT * FROM entries WHERE is_pinned = 1 ORDER BY created_at DESC"
+            )
+            return rows.map(StoredEntry.init)
         }
     }
 
@@ -186,6 +213,45 @@ public final class ClipsterDatabase {
                 sql: "SELECT * FROM entries ORDER BY created_at DESC LIMIT 1"
             )
             return row.map(StoredEntry.init)
+        }
+    }
+
+    /// Find a single entry by ID, or nil if not found.
+    public func findEntry(id: String) throws -> StoredEntry? {
+        try dbQueue.read { db in
+            let row = try Row.fetchOne(
+                db,
+                sql: "SELECT * FROM entries WHERE id = ?",
+                arguments: [id]
+            )
+            return row.map(StoredEntry.init)
+        }
+    }
+
+    // MARK: - Writes (clipsterd only — PRD §7.2 write ownership invariant)
+
+    /// Pin or unpin an entry.
+    public func setPin(id: String, pinned: Bool) throws {
+        try dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE entries SET is_pinned = ? WHERE id = ?",
+                arguments: [pinned ? 1 : 0, id]
+            )
+        }
+    }
+
+    /// Delete a single entry by ID.
+    public func delete(id: String) throws {
+        try dbQueue.write { db in
+            try db.execute(sql: "DELETE FROM entries WHERE id = ?", arguments: [id])
+        }
+    }
+
+    /// Delete all non-pinned entries. Returns the number of deleted rows.
+    public func clearHistory() throws -> Int {
+        try dbQueue.write { db in
+            try db.execute(sql: "DELETE FROM entries WHERE is_pinned = 0")
+            return db.changesCount
         }
     }
 

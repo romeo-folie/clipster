@@ -18,7 +18,7 @@ logger.info("Config:  \(ConfigLoader.configURL.path)")
 
 logger.info("clipsterd \(version) starting (PID \(pid))")
 logger.info("DB:      \(ClipsterDatabase.dbURL.path)")
-logger.info("Socket:  ~/Library/Application Support/Clipster/clipster.sock [Phase 1 — IPC]")
+logger.info("Socket:  \(IPCPaths.socketURL.path)")
 
 // ─── Database ─────────────────────────────────────────────────────────────────
 
@@ -43,6 +43,16 @@ let monitor = ClipboardMonitor(config: config) { entry in
 monitor.start()
 logger.info("Clipboard monitor started — poll: \(Int(monitor.pollInterval * 1000))ms, debounce: \(Int(monitor.debounceDelay * 1000))ms")
 
+// ─── IPC server ───────────────────────────────────────────────────────────────
+
+let ipcServer = IPCServer(database: database)
+do {
+    try ipcServer.start()
+} catch {
+    logger.error("Failed to start IPC server: \(error)")
+    // Non-fatal in Phase 1 — daemon continues without IPC, CLI falls back to SQLite.
+}
+
 // ─── Signal handling ──────────────────────────────────────────────────────────
 // PRD §7.3.7 shutdown sequence:
 // 1. Stop accepting new IPC connections (Phase 1)
@@ -60,8 +70,10 @@ signal(SIGINT, SIG_IGN)
 let sigSrc = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
 sigSrc.setEventHandler {
     logger.info("Received SIGTERM — shutting down")
-    monitor.stop()
-    // DB closes when `database` is deallocated; GRDB flushes the write queue.
+    // PRD §7.3.7 shutdown sequence:
+    ipcServer.stop()      // 1. Stop accepting connections, remove socket file
+    monitor.stop()         // 2. Stop clipboard monitor
+    // 3. DB closes on dealloc; GRDB flushes the write queue before closing
     logger.info("clipsterd stopped cleanly")
     exit(0)
 }
@@ -70,6 +82,7 @@ sigSrc.resume()
 let intSrc = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
 intSrc.setEventHandler {
     logger.info("Received SIGINT — shutting down")
+    ipcServer.stop()
     monitor.stop()
     logger.info("clipsterd stopped cleanly")
     exit(0)
