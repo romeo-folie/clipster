@@ -127,9 +127,21 @@ fi
 # ─── Install binaries ─────────────────────────────────────────────────────────
 
 info "Installing binaries to $BIN_DIR..."
-mkdir -p "$BIN_DIR"
-install -m 755 "$TMPDIR_CLIPSTER/clipsterd" "$BIN_DIR/clipsterd"
-install -m 755 "$TMPDIR_CLIPSTER/clipster"  "$BIN_DIR/clipster"
+# Create bin dir — may need sudo if prefix is system-owned (e.g. /usr/local)
+if ! mkdir -p "$BIN_DIR" 2>/dev/null; then
+    sudo mkdir -p "$BIN_DIR" || fail "Cannot create $BIN_DIR (even with sudo)"
+fi
+# Install with sudo fallback so the caller doesn't have to run the whole script as root
+_install_bin() {
+    local src="$1" dst="$2"
+    if install -m 755 "$src" "$dst" 2>/dev/null; then
+        return 0
+    fi
+    echo "  ⚠ Cannot write to $dst — retrying with sudo..."
+    sudo install -m 755 "$src" "$dst" || fail "Cannot install $dst (sudo failed)"
+}
+_install_bin "$TMPDIR_CLIPSTER/clipsterd" "$BIN_DIR/clipsterd"
+_install_bin "$TMPDIR_CLIPSTER/clipster"  "$BIN_DIR/clipster"
 success "Installed: $BIN_DIR/clipsterd"
 success "Installed: $BIN_DIR/clipster"
 
