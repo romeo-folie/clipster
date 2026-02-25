@@ -82,15 +82,42 @@ If either fails: evaluate alternatives before continuing. Escalate to Alfred.
 
 ## Phase 4 — GUI Transition (PRD §14)
 
-**Status:** 🚧 In Progress (kickoff)  
+**Status:** ✅ Complete  
 **Objective:** Evolve `clipsterd` into an app-bundle-capable runtime without breaking CLI clients.
 
-- Architecture + migration plan per PRD §14.1
-- Lifecycle transition plan (LaunchAgent → app-capable runtime)
-- Permissions strategy (TCC/Accessibility/CGEvent)
-- Backward-compatible IPC and schema guarantees
+- Dual-mode runtime bootstrap (`headless` / `app`) — `Runtime.swift`
+- Migration state model + lifecycle compatibility layer — `MigrationState.swift`
+- Permission preflight framework (TCC / Accessibility / CGEvent) — `PermissionPreflight.swift`
+- IPC v1 contract tests + schema regression suite — `IPCContractTests.swift`
+- Expanded `docs/PHASE4_GUI_TRANSITION.md` with Mermaid architecture + risk register
 
-Tracking issue: #19
+Issues: #19, #20, #21, #22, #23 — all closed.
+
+---
+
+## Phase 5 — GUI App (v3 PRD)
+
+**Status:** 🚧 In Progress  
+**PRD:** `~/superteam-ops/outbox/clipster-prd-v3.md`  
+**Objective:** Build the Clipster menu bar app on top of the Phase 4 runtime foundation.
+
+### Phase 5.0 — CGEvent Prototype Gate (current)
+**Go/No-Go** — CGEvent paste must work with a notarised binary before GUI work proceeds.
+
+- [ ] `cgevent-prototype/` Swift package: paste via CGEvent into previous app
+- [ ] Accessibility permission request + runtime check
+- [ ] Entitlements + hardened runtime wiring
+- [ ] Sign + notarise scripts
+- [ ] Romeo gate: verify notarised binary pastes successfully
+
+### Phase 5.1 — Core GUI (pending gate)
+- Clipboard monitoring, SQLite, basic floating panel, IPC, Go CLI updates
+
+### Phase 5.2 — Full Feature (pending)
+- Transform panel, pins, content type detection, settings UI, empty states
+
+### Phase 5.3 — Polish & Distribution (pending)
+- Sparkle auto-update, Homebrew cask, DMG, performance validation
 
 ---
 

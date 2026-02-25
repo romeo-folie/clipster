@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened Runtime entitlements for the CGEvent paste prototype.
+
+  CGEvent simulation (kVK_ANSI_V via CGEventPost) requires:
+  - Accessibility permission (runtime TCC grant by the user — not an entitlement)
+  - Hardened Runtime (required for notarisation)
+
+  No special entitlements are required for CGEvent keyboard simulation.
+  The com.apple.security.automation.apple-events entitlement is for
+  Apple Event automation, not CGEvent — do not confuse the two.
+
+  If the gate FAILS with this minimal entitlements set, the next step is to
+  test with com.apple.security.temporary-exception.sbpl to see if the sandbox
+  is the blocking factor. Document outcome in GitHub issue #25.
+-->
+<plist version="1.0">
+<dict>
+    <!-- Hardened Runtime with no app sandbox — standalone CLI tool. -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+</dict>
+</plist>
