@@ -80,6 +80,20 @@ If either fails: evaluate alternatives before continuing. Escalate to Alfred.
 
 ---
 
+## Phase 4 — GUI Transition (PRD §14)
+
+**Status:** 🚧 In Progress (kickoff)  
+**Objective:** Evolve `clipsterd` into an app-bundle-capable runtime without breaking CLI clients.
+
+- Architecture + migration plan per PRD §14.1
+- Lifecycle transition plan (LaunchAgent → app-capable runtime)
+- Permissions strategy (TCC/Accessibility/CGEvent)
+- Backward-compatible IPC and schema guarantees
+
+Tracking issue: #19
+
+---
+
 ### Known Phase 1 Gaps (documented — not blockers for PR)
 
 | Gap | Notes |
