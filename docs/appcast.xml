@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Clipster Sparkle Appcast Feed
+  Hosted at: https://github.com/romeo-folie/clipster/releases/latest/download/appcast.xml
+
+  WORKFLOW — adding a new release:
+  ─────────────────────────────────────────────────────────────────────────────
+  1. Build and notarise the release DMG:
+       make build-app sign-app notarise-app
+       make dmg                             # Phase 3.3
+
+  2. Sign the DMG with your Ed25519 private key:
+       ./dist/Sparkle/bin/sign_update dist/Clipster-<VERSION>.dmg
+     Copy the printed edSignature value into the <item> block below.
+
+  3. Get the file length:
+       stat -f%z dist/Clipster-<VERSION>.dmg
+
+  4. Add a new <item> block at the top of the <channel> (below the last item).
+     Update all PLACEHOLDER values.
+
+  5. Commit appcast.xml and upload it alongside the DMG to the GitHub Release.
+
+  KEY GENERATION (one-time setup):
+  ─────────────────────────────────────────────────────────────────────────────
+  Download the Sparkle release archive from:
+    https://github.com/sparkle-project/Sparkle/releases/download/2.9.0/Sparkle-2.9.0.tar.xz
+
+  Extract and run:
+    ./bin/generate_keys
+
+  - Public key → paste into Info.plist under SUPublicEDKey
+  - Private key → store in macOS Keychain (generate_keys does this automatically)
+-->
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+    <channel>
+        <title>Clipster</title>
+        <link>https://github.com/romeo-folie/clipster</link>
+        <description>Clipster changelog and release feed</description>
+        <language>en</language>
+
+        <!-- ─── TEMPLATE ITEM — duplicate and fill for each release ────── -->
+        <!--
+        <item>
+            <title>Clipster 0.1.0</title>
+            <sparkle:version>1</sparkle:version>
+            <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <pubDate>Sat, 28 Feb 2026 00:00:00 +0000</pubDate>
+            <description><![CDATA[
+                <h2>Clipster 0.1.0</h2>
+                <ul>
+                    <li>Initial release</li>
+                </ul>
+            ]]></description>
+            <enclosure
+                url="https://github.com/romeo-folie/clipster/releases/download/v0.1.0/Clipster-0.1.0.dmg"
+                sparkle:edSignature="PLACEHOLDER_ED25519_SIGNATURE"
+                length="PLACEHOLDER_FILE_LENGTH_BYTES"
+                type="application/octet-stream"
+            />
+        </item>
+        -->
+
+    </channel>
+</rss>

@@ -12,6 +12,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private let keyboardMonitor = KeyboardMonitor()
     private let viewModel = ClipboardViewModel()
     private var globalShortcut: GlobalShortcut?
+    // Sparkle auto-update controller. Strong reference required — Sparkle stores
+    // the controller weakly internally and it must stay alive for the lifetime of the app.
+    private let updateManager = UpdateManager()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Apply stored appearance before any windows open.
@@ -64,6 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         // Right-click menu
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ","))
+        menu.addItem(NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Clipster", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = nil // Set dynamically on right-click
@@ -111,6 +115,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     @objc private func openSettings() {
         NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func checkForUpdates() {
+        updateManager.checkForUpdates()
     }
 
     private func openPopover(relativeTo button: NSStatusBarButton) {
