@@ -1,5 +1,4 @@
 import ClipsterCore
-import Combine
 import SwiftUI
 
 /// View model for the clipboard panel. Reads from ClipsterCore's SQLite database
@@ -38,17 +37,22 @@ final class ClipboardViewModel: ObservableObject {
         return historyEntries.filter { $0.preview.lowercased().contains(q) }
     }
 
-    // MARK: - Actions
+    // MARK: - Write Actions (all writes go through IPC to clipsterd)
 
+    /// Toggle pin state. Sends pin/unpin via IPC to preserve clipsterd's sole-write-owner invariant.
     func togglePin(id: String) {
-        guard let db = db else { return }
-        do {
-            if let entry = try db.findEntry(id: id) {
-                try db.setPin(id: id, pinned: !entry.isPinned)
-                refresh()
+        let isPinned = pinnedEntries.contains(where: { $0.id == id })
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            do {
+                if isPinned {
+                    try IPCClient.unpin(id: id)
+                } else {
+                    try IPCClient.pin(id: id)
+                }
+                self?.refresh()
+            } catch {
+                // IPC failed (daemon not running) — silently ignore.
             }
-        } catch {
-            // Pin toggle failed — silently ignore for now.
         }
     }
 
@@ -74,12 +78,13 @@ final class ClipboardViewModel: ObservableObject {
     }
 
     func deleteEntry(id: String) {
-        guard let db = db else { return }
-        do {
-            try db.delete(id: id)
-            refresh()
-        } catch {
-            // Delete failed — silently ignore.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            do {
+                try IPCClient.delete(id: id)
+                self?.refresh()
+            } catch {
+                // IPC failed — silently ignore.
+            }
         }
     }
 
@@ -101,24 +106,26 @@ final class ClipboardViewModel: ObservableObject {
 
     func refresh() {
         guard let db = db else { return }
-        do {
-            let pinned = try db.listPinned()
-            let history = try db.list(limit: 200)
-
-            DispatchQueue.main.async { [weak self] in
-                self?.pinnedEntries = pinned.map { ClipboardEntry(from: $0, isPinned: true) }
-                self?.historyEntries = history
-                    .filter { !$0.isPinned }
-                    .map { ClipboardEntry(from: $0, isPinned: false) }
+        // DB reads happen on a background queue; UI updates are dispatched to main.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            do {
+                let pinned = try db.listPinned()
+                let history = try db.list(limit: 200)
+                DispatchQueue.main.async {
+                    self?.pinnedEntries = pinned.map { ClipboardEntry(from: $0, isPinned: true) }
+                    self?.historyEntries = history
+                        .filter { !$0.isPinned }
+                        .map { ClipboardEntry(from: $0, isPinned: false) }
+                }
+            } catch {
+                // Refresh failed — keep existing data.
             }
-        } catch {
-            // Refresh failed — keep existing data.
         }
     }
 
     private func startAutoRefresh() {
-        // Poll every 2 seconds for new clipboard entries.
-        // In a future iteration this could use IPC notifications from the daemon.
+        // Poll every 2 seconds for new entries. The timer fires on the main RunLoop
+        // but refresh() dispatches work to a background queue.
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.refresh()
         }
