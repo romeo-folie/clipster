@@ -4,7 +4,7 @@ import SwiftUI
 /// Contains a search field, pinned section, and history section.
 struct ClipboardPanelView: View {
     @Environment(\.colorScheme) var colorScheme
-    @StateObject private var viewModel = ClipboardViewModel()
+    @ObservedObject var viewModel: ClipboardViewModel
 
     var body: some View {
         VStack(spacing: 0) {

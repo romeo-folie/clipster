@@ -7,6 +7,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private var eventMonitor: Any?
+    private let keyboardMonitor = KeyboardMonitor()
+    private let viewModel = ClipboardViewModel()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Hide dock icon — menu bar only.
@@ -22,7 +24,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem.button {
-            // Template image adapts to light/dark menu bar automatically.
             button.image = NSImage(
                 systemSymbolName: "doc.on.clipboard",
                 accessibilityDescription: "Clipster"
@@ -36,11 +37,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     private func setupPopover() {
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 380, height: 520)
-        popover.behavior = .transient // Closes on click-outside
+        popover.contentSize = NSSize(width: Theme.panelWidth, height: Theme.panelHeight)
+        popover.behavior = .transient
         popover.animates = true
 
-        let contentView = ClipboardPanelView()
+        let contentView = ClipboardPanelView(viewModel: viewModel)
         popover.contentViewController = NSHostingController(rootView: contentView)
     }
 
@@ -49,16 +50,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         if popover.isShown {
             closePopover()
         } else {
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            NSApp.activate(ignoringOtherApps: true)
+            openPopover(relativeTo: button)
         }
+    }
+
+    private func openPopover(relativeTo button: NSStatusBarButton) {
+        viewModel.refresh()
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        NSApp.activate(ignoringOtherApps: true)
+
+        // Start keyboard monitor for panel navigation.
+        keyboardMonitor.start(
+            viewModel: viewModel,
+            onClose: { [weak self] in self?.closePopover() },
+            onPaste: { [weak self] entry in
+                PasteService.pasteToFrontApp(content: entry.preview) {
+                    self?.closePopover()
+                }
+            }
+        )
     }
 
     func closePopover() {
         popover.performClose(nil)
+        keyboardMonitor.stop()
     }
 
-    // MARK: - Click-outside dismissal (backup for .transient)
+    // MARK: - Click-outside dismissal
 
     private func setupEventMonitor() {
         eventMonitor = NSEvent.addGlobalMonitorForEvents(
