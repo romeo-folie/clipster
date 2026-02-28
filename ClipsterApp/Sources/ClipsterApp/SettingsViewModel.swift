@@ -18,7 +18,9 @@ final class SettingsViewModel: ObservableObject {
     @Published var launchAtLogin: Bool = true {
         didSet { updateLaunchAtLogin() }
     }
-    @AppStorage("appearance") var appearance: AppearanceMode = .auto
+    @AppStorage("appearance") var appearance: AppearanceMode = .auto {
+        didSet { applyAppearance() }
+    }
 
     // MARK: - Shortcut
 
@@ -40,6 +42,35 @@ final class SettingsViewModel: ObservableObject {
         loadSuppressedApps()
         checkCLIInstalled()
         loadLaunchAtLogin()
+        applyAppearance()
+    }
+
+    // MARK: - Appearance
+
+    func applyAppearance() {
+        let mode: NSAppearance? = {
+            switch appearance {
+            case .light: return NSAppearance(named: .aqua)
+            case .dark:  return NSAppearance(named: .darkAqua)
+            case .auto:  return nil  // nil = follow system
+            }
+        }()
+        DispatchQueue.main.async {
+            NSApp.appearance = mode
+        }
+    }
+
+    /// Apply stored appearance on launch — call from AppDelegate before any windows open.
+    static func applyStoredAppearance() {
+        let raw = UserDefaults.standard.string(forKey: "appearance") ?? "auto"
+        let mode = AppearanceMode(rawValue: raw) ?? .auto
+        NSApp.appearance = {
+            switch mode {
+            case .light: return NSAppearance(named: .aqua)
+            case .dark:  return NSAppearance(named: .darkAqua)
+            case .auto:  return nil
+            }
+        }()
     }
 
     // MARK: - Launch at Login

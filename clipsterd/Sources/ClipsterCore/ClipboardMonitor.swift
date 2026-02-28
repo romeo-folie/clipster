@@ -152,11 +152,16 @@ public final class ClipboardMonitor {
 
         // Password manager suppression — PRD §7.1.
         // Use the app at detection time (the app that triggered the copy).
+        let isSuppressed: Bool
         suppressLock.lock()
-        let isSuppressed = detectedApp?.bundleIdentifier.flatMap { runtimeSuppressBundles.contains($0) } ?? false
+        if let bundleID = detectedApp?.bundleIdentifier {
+            isSuppressed = runtimeSuppressBundles.contains(bundleID)
+        } else {
+            isSuppressed = false
+        }
         suppressLock.unlock()
-        if isSuppressed, let bundleID = detectedApp?.bundleIdentifier {
-            _ = bundleID  // Used in log below
+        if isSuppressed {
+            let bundleID = detectedApp?.bundleIdentifier ?? "unknown"
             logger.debug("Suppressed entry from \(bundleID)")
             return
         }

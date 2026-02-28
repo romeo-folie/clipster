@@ -114,6 +114,8 @@ struct TransformPanelView: View {
                 hoveredTransform = transform.name
                 selectedIndex = index
                 fetchPreview(transformName: transform.name)
+            } else if hoveredTransform == transform.name {
+                hoveredTransform = nil
             }
         }
         .onTapGesture {

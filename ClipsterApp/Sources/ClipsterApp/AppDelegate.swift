@@ -13,6 +13,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private var globalShortcut: GlobalShortcut?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Apply stored appearance before any windows open.
+        SettingsViewModel.applyStoredAppearance()
+
         // Hide dock icon — menu bar only.
         NSApp.setActivationPolicy(.accessory)
 
