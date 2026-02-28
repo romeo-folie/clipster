@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private var eventMonitor: Any?
     private let keyboardMonitor = KeyboardMonitor()
     private let viewModel = ClipboardViewModel()
+    private var globalShortcut: GlobalShortcut?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Hide dock icon — menu bar only.
@@ -17,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         setupStatusItem()
         setupPopover()
         setupEventMonitor()
+        setupGlobalShortcut()
     }
 
     // MARK: - Status Bar
@@ -69,6 +71,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                 }
             }
         )
+    }
+
+    // MARK: - Global Shortcut
+
+    private func setupGlobalShortcut() {
+        // Load shortcut from UserDefaults if configured; default ⌘⇧V.
+        let shortcut = loadSavedShortcut() ?? .defaultPaste
+        globalShortcut = GlobalShortcut(shortcut: shortcut) { [weak self] in
+            self?.togglePopover()
+        }
+        globalShortcut?.start()
+    }
+
+    /// Reads a persisted shortcut from UserDefaults (key "globalShortcut").
+    /// Format stored: "<keyCode>:<modifierRawValue>" e.g. "9:786432"
+    private func loadSavedShortcut() -> GlobalShortcut.Shortcut? {
+        guard let raw = UserDefaults.standard.string(forKey: "globalShortcut"),
+              case let parts = raw.split(separator: ":"),
+              parts.count == 2,
+              let keyCode = UInt16(parts[0]),
+              let modRaw = UInt64(parts[1]) else { return nil }
+        return GlobalShortcut.Shortcut(keyCode: keyCode, modifiers: CGEventFlags(rawValue: modRaw))
     }
 
     func closePopover() {
