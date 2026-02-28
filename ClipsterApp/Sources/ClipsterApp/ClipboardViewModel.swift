@@ -52,6 +52,27 @@ final class ClipboardViewModel: ObservableObject {
         }
     }
 
+    /// Appends the app name/bundle to the suppress list in the daemon config.
+    /// Takes effect on next daemon restart. Writes to ~/.config/clipster/config.ini.
+    func suppressApp(bundleOrName: String) {
+        guard !bundleOrName.isEmpty, bundleOrName != "Unknown" else { return }
+        let configURL = FileManager.default
+            .homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/clipster/config.ini")
+        guard let contents = try? String(contentsOf: configURL, encoding: .utf8) else { return }
+        // Avoid duplicates.
+        if contents.contains(bundleOrName) { return }
+        // Append to [privacy] section if present, otherwise append at end.
+        var updated = contents
+        if let range = contents.range(of: "suppress_bundles = [") {
+            // Insert before the closing bracket.
+            if let closeRange = contents.range(of: "]", range: range.upperBound..<contents.endIndex) {
+                updated.insert(contentsOf: "\n    \"\(bundleOrName)\",", at: closeRange.lowerBound)
+            }
+        }
+        try? updated.write(to: configURL, atomically: true, encoding: .utf8)
+    }
+
     func deleteEntry(id: String) {
         guard let db = db else { return }
         do {

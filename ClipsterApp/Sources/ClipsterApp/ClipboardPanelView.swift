@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The main floating panel view anchored to the menu bar icon.
@@ -5,6 +6,7 @@ import SwiftUI
 struct ClipboardPanelView: View {
     @Environment(\.colorScheme) var colorScheme
     @ObservedObject var viewModel: ClipboardViewModel
+    var onPaste: ((ClipboardEntry) -> Void)?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,12 +19,7 @@ struct ClipboardPanelView: View {
                     if !viewModel.filteredPinned.isEmpty {
                         sectionHeader("PINNED")
                         ForEach(viewModel.filteredPinned) { entry in
-                            ClipboardEntryRow(
-                                entry: entry,
-                                isSelected: viewModel.selectedID == entry.id,
-                                colorScheme: colorScheme
-                            )
-                            .onTapGesture { viewModel.selectedID = entry.id }
+                            entryRow(for: entry)
                         }
                     }
 
@@ -34,12 +31,7 @@ struct ClipboardPanelView: View {
                         }
                         sectionHeader("HISTORY")
                         ForEach(viewModel.filteredHistory) { entry in
-                            ClipboardEntryRow(
-                                entry: entry,
-                                isSelected: viewModel.selectedID == entry.id,
-                                colorScheme: colorScheme
-                            )
-                            .onTapGesture { viewModel.selectedID = entry.id }
+                            entryRow(for: entry)
                         }
                     }
 
@@ -53,6 +45,26 @@ struct ClipboardPanelView: View {
         }
         .frame(width: Theme.panelWidth, height: Theme.panelHeight)
         .background(Theme.panelBackground(for: colorScheme))
+    }
+
+    // MARK: - Entry Row Factory
+
+    private func entryRow(for entry: ClipboardEntry) -> some View {
+        ClipboardEntryRow(
+            entry: entry,
+            isSelected: viewModel.selectedID == entry.id,
+            colorScheme: colorScheme,
+            onCopy: {
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                pb.setString(entry.preview, forType: .string)
+            },
+            onPaste: { onPaste?(entry) },
+            onPin: { viewModel.togglePin(id: entry.id) },
+            onDelete: { viewModel.deleteEntry(id: entry.id) },
+            onSuppressApp: { viewModel.suppressApp(bundleOrName: entry.sourceApp) }
+        )
+        .onTapGesture { viewModel.selectedID = entry.id }
     }
 
     // MARK: - Search Field

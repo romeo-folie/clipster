@@ -6,6 +6,11 @@ struct ClipboardEntryRow: View {
     let entry: ClipboardEntry
     let isSelected: Bool
     let colorScheme: ColorScheme
+    var onCopy: (() -> Void)?
+    var onPaste: (() -> Void)?
+    var onPin: (() -> Void)?
+    var onDelete: (() -> Void)?
+    var onSuppressApp: (() -> Void)?
 
     @State private var isHovered = false
 
@@ -45,6 +50,32 @@ struct ClipboardEntryRow: View {
         .onHover { hovering in
             isHovered = hovering
         }
+        .contextMenu {
+            contextMenuItems
+        }
+    }
+
+    // MARK: - Context Menu
+
+    @ViewBuilder
+    private var contextMenuItems: some View {
+        Button("Copy") { onCopy?() }
+        Button("Paste") { onPaste?() }
+
+        Divider()
+
+        Button(entry.isPinned ? "Unpin  ⌘P" : "Pin  ⌘P") { onPin?() }
+        Button("Transform…  Tab") { /* stub — Phase 1 */ }
+            .disabled(true)
+
+        Divider()
+
+        if !entry.sourceApp.isEmpty && entry.sourceApp != "Unknown" {
+            Button("Don't capture from \(entry.sourceApp)") { onSuppressApp?() }
+            Divider()
+        }
+
+        Button("Delete", role: .destructive) { onDelete?() }
     }
 
     // MARK: - Type Icon

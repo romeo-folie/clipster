@@ -43,7 +43,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         popover.behavior = .transient
         popover.animates = true
 
-        let contentView = ClipboardPanelView(viewModel: viewModel)
+        let contentView = ClipboardPanelView(viewModel: viewModel, onPaste: { [weak self] entry in
+            PasteService.pasteToFrontApp(content: entry.preview) {
+                self?.closePopover()
+            }
+        })
         popover.contentViewController = NSHostingController(rootView: contentView)
     }
 
