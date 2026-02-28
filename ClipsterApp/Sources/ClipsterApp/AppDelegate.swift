@@ -1,4 +1,5 @@
 import AppKit
+import ClipsterCore
 import SwiftUI
 
 /// AppDelegate manages the status bar item and popover panel.
@@ -7,11 +8,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private var eventMonitor: Any?
+    private var statusBarMenu: NSMenu?
     private let keyboardMonitor = KeyboardMonitor()
     private let viewModel = ClipboardViewModel()
     private var globalShortcut: GlobalShortcut?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Apply stored appearance before any windows open.
+        SettingsViewModel.applyStoredAppearance()
+
         // Hide dock icon — menu bar only.
         NSApp.setActivationPolicy(.accessory)
 
@@ -19,6 +24,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         setupPopover()
         setupEventMonitor()
         setupGlobalShortcut()
+
+        // Re-sync suppress list to daemon on every launch.
+        // The daemon holds suppress state only in memory (runtime set) and reads
+        // config.ini on startup. If the daemon restarts while the app is running,
+        // or starts fresh, it loses any GUI-added suppressions. Sending the full
+        // list on our launch ensures the daemon's runtime set always reflects
+        // what the user configured — UserDefaults is the source of truth for the list.
+        syncSuppressListToDaemon()
+    }
+
+    /// Pushes every entry in the persisted suppress list to the daemon over IPC.
+    /// Safe to call on launch — the daemon deduplicates internally.
+    private func syncSuppressListToDaemon() {
+        let defaults: [String] = ["1Password", "Bitwarden", "Dashlane", "LastPass"]
+        let apps = UserDefaults.standard.stringArray(forKey: "suppressedApps") ?? defaults
+        guard !apps.isEmpty else { return }
+        DispatchQueue.global(qos: .background).async {
+            for app in apps {
+                try? IPCClient.send("suppress", params: IPCParams(entryID: app))
+            }
+        }
     }
 
     // MARK: - Status Bar
@@ -32,7 +58,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             )
             button.action = #selector(togglePopover)
             button.target = self
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
+
+        // Right-click menu
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ","))
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Quit Clipster", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        statusItem.menu = nil // Set dynamically on right-click
+        statusBarMenu = menu
     }
 
     // MARK: - Popover
@@ -54,11 +89,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     @objc private func togglePopover() {
         guard let button = statusItem.button else { return }
+        let event = NSApp.currentEvent
+        // Right-click → show menu
+        if event?.type == .rightMouseUp, let menu = statusBarMenu {
+            statusItem.menu = menu
+            button.performClick(nil)
+            // Clear menu after display so left-click works normally
+            DispatchQueue.main.async { [weak self] in
+                self?.statusItem.menu = nil
+            }
+            return
+        }
+        // Left-click → toggle popover
         if popover.isShown {
             closePopover()
         } else {
             openPopover(relativeTo: button)
         }
+    }
+
+    @objc private func openSettings() {
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func openPopover(relativeTo button: NSStatusBarButton) {

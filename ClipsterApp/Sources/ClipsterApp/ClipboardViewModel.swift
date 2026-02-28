@@ -6,6 +6,7 @@ import SwiftUI
 final class ClipboardViewModel: ObservableObject {
     @Published var searchQuery = ""
     @Published var selectedID: String?
+    @Published var showTransformPanel = false
     @Published var pinnedEntries: [ClipboardEntry] = []
     @Published var historyEntries: [ClipboardEntry] = []
     @Published var databaseAvailable = false
@@ -56,12 +57,16 @@ final class ClipboardViewModel: ObservableObject {
         }
     }
 
-    /// Suppress app — requires IPC command not yet implemented in clipsterd.
-    /// Stubbed: logs intent. Will be wired when daemon adds "suppress" IPC command.
+    /// Suppress app via IPC. Adds the bundle/name to clipsterd's runtime suppress list.
     func suppressApp(bundleOrName: String) {
-        // TODO: Route through IPC once clipsterd supports a "suppress" command.
-        // Direct config file writes violate the sole-write-owner invariant.
-        print("[ClipsterApp] suppressApp requested for \(bundleOrName) — not yet supported via IPC")
+        guard !bundleOrName.isEmpty, bundleOrName != "Unknown" else { return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                try IPCClient.send("suppress", params: IPCParams(entryID: bundleOrName))
+            } catch {
+                // IPC failed — daemon may not be running.
+            }
+        }
     }
 
     func deleteEntry(id: String) {

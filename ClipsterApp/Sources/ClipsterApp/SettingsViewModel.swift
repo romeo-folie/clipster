@@ -1,0 +1,181 @@
+import ClipsterCore
+import Foundation
+import ServiceManagement
+import SwiftUI
+
+/// Appearance mode for the app.
+enum AppearanceMode: String, CaseIterable {
+    case auto, light, dark
+}
+
+/// Manages user settings, backed by UserDefaults.
+/// On change, syncs relevant values to clipsterd config file.
+final class SettingsViewModel: ObservableObject {
+    // MARK: - General
+
+    @AppStorage("entryLimit") var entryLimit: Int = 500
+    @AppStorage("dbSizeCap") var dbSizeCap: Int = 500
+    @Published var launchAtLogin: Bool = true {
+        didSet { updateLaunchAtLogin() }
+    }
+    @AppStorage("appearance") var appearance: AppearanceMode = .auto {
+        didSet { applyAppearance() }
+    }
+
+    // MARK: - Shortcut
+
+    @AppStorage("globalShortcut") var shortcutRaw: String = ""
+    var shortcutDisplay: String {
+        shortcutRaw.isEmpty ? "⌘⇧V (default)" : shortcutRaw
+    }
+
+    // MARK: - Privacy
+
+    @Published var suppressedApps: [String] = []
+    @Published var newSuppressApp: String = ""
+
+    // MARK: - CLI
+
+    @Published var cliInstalled: Bool = false
+
+    init() {
+        loadSuppressedApps()
+        checkCLIInstalled()
+        loadLaunchAtLogin()
+        applyAppearance()
+    }
+
+    // MARK: - Appearance
+
+    func applyAppearance() {
+        let mode: NSAppearance? = {
+            switch appearance {
+            case .light: return NSAppearance(named: .aqua)
+            case .dark:  return NSAppearance(named: .darkAqua)
+            case .auto:  return nil  // nil = follow system
+            }
+        }()
+        DispatchQueue.main.async {
+            NSApp.appearance = mode
+        }
+    }
+
+    /// Apply stored appearance on launch — call from AppDelegate before any windows open.
+    static func applyStoredAppearance() {
+        let raw = UserDefaults.standard.string(forKey: "appearance") ?? "auto"
+        let mode = AppearanceMode(rawValue: raw) ?? .auto
+        NSApp.appearance = {
+            switch mode {
+            case .light: return NSAppearance(named: .aqua)
+            case .dark:  return NSAppearance(named: .darkAqua)
+            case .auto:  return nil
+            }
+        }()
+    }
+
+    // MARK: - Launch at Login
+
+    private func loadLaunchAtLogin() {
+        if #available(macOS 13.0, *) {
+            launchAtLogin = SMAppService.mainApp.status == .enabled
+        }
+    }
+
+    private func updateLaunchAtLogin() {
+        if #available(macOS 13.0, *) {
+            do {
+                if launchAtLogin {
+                    try SMAppService.mainApp.register()
+                } else {
+                    try SMAppService.mainApp.unregister()
+                }
+            } catch {
+                // Registration failed — revert state.
+                DispatchQueue.main.async { [weak self] in
+                    self?.launchAtLogin = SMAppService.mainApp.status == .enabled
+                }
+            }
+        }
+    }
+
+    // MARK: - Suppress List
+
+    func addSuppressedApp() {
+        let app = newSuppressApp.trimmingCharacters(in: .whitespaces)
+        guard !app.isEmpty, !suppressedApps.contains(app) else { return }
+        suppressedApps.append(app)
+        newSuppressApp = ""
+        saveSuppressedApps()
+        // Notify daemon at runtime.
+        DispatchQueue.global(qos: .userInitiated).async {
+            try? IPCClient.send("suppress", params: IPCParams(entryID: app))
+        }
+    }
+
+    func removeSuppressedApp(_ app: String) {
+        suppressedApps.removeAll { $0 == app }
+        saveSuppressedApps()
+        DispatchQueue.global(qos: .userInitiated).async {
+            try? IPCClient.send("unsuppress", params: IPCParams(entryID: app))
+        }
+    }
+
+    private func loadSuppressedApps() {
+        if let apps = UserDefaults.standard.stringArray(forKey: "suppressedApps") {
+            suppressedApps = apps
+        } else {
+            // Default suppress list per PRD §7.8
+            suppressedApps = ["1Password", "Bitwarden", "Dashlane", "LastPass"]
+        }
+    }
+
+    private func saveSuppressedApps() {
+        UserDefaults.standard.set(suppressedApps, forKey: "suppressedApps")
+        // IPC suppress/unsuppress is sent by the caller (addSuppressedApp/removeSuppressedApp).
+        // AppDelegate.syncSuppressListToDaemon() re-syncs the full list on every launch
+        // so daemon restarts never lose the persisted suppress state.
+    }
+
+    // MARK: - Clear History
+
+    func clearHistory() {
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                try IPCClient.send("clear")
+            } catch {
+                // IPC failed — daemon may not be running.
+            }
+        }
+    }
+
+    // MARK: - CLI Install/Uninstall
+
+    func checkCLIInstalled() {
+        cliInstalled = FileManager.default.fileExists(atPath: "/usr/local/bin/clipster")
+            || FileManager.default.fileExists(
+                atPath: FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent(".local/bin/clipster").path
+            )
+    }
+
+    func installCLI() {
+        // Run the install script bundled with the app.
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = ["-c", "scripts/install.sh"]
+        process.currentDirectoryURL = Bundle.main.bundleURL
+        try? process.run()
+        process.waitUntilExit()
+        checkCLIInstalled()
+    }
+
+    func uninstallCLI() {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = ["-c", "scripts/uninstall.sh"]
+        process.currentDirectoryURL = Bundle.main.bundleURL
+        try? process.run()
+        process.waitUntilExit()
+        checkCLIInstalled()
+    }
+}

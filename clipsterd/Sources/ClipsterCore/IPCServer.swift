@@ -13,6 +13,7 @@ public final class IPCServer {
     // MARK: - State
 
     private let database: ClipsterDatabase
+    private weak var monitor: ClipboardMonitor?
     private var listenerSocket: Int32 = -1
     private var isRunning = false
 
@@ -23,8 +24,9 @@ public final class IPCServer {
 
     // MARK: - Init
 
-    public init(database: ClipsterDatabase) {
+    public init(database: ClipsterDatabase, monitor: ClipboardMonitor? = nil) {
         self.database = database
+        self.monitor = monitor
     }
 
     // MARK: - Lifecycle
@@ -108,15 +110,16 @@ public final class IPCServer {
             logger.debug("IPC client connected (fd \(clientFD))")
             // Handle each client on its own thread (clients are short-lived)
             let db = database
+            let mon = monitor
             DispatchQueue.global(qos: .userInteractive).async {
-                IPCServer.handleClient(clientFD, database: db)
+                IPCServer.handleClient(clientFD, database: db, monitor: mon)
             }
         }
     }
 
     // MARK: - Client handling
 
-    private static func handleClient(_ fd: Int32, database: ClipsterDatabase) {
+    private static func handleClient(_ fd: Int32, database: ClipsterDatabase, monitor: ClipboardMonitor?) {
         defer {
             close(fd)
             logger.debug("IPC client disconnected (fd \(fd))")
@@ -137,7 +140,7 @@ public final class IPCServer {
             // Try to parse and respond to all complete frames in the buffer
             while let (body, remaining) = IPCFraming.readFrame(from: readBuffer) {
                 readBuffer = remaining
-                let responseData = processMessage(body, database: database)
+                let responseData = processMessage(body, database: database, monitor: monitor)
                 do {
                     let frame = try IPCFraming.encode(responseData)
                     _ = frame.withUnsafeBytes { ptr in
@@ -153,7 +156,7 @@ public final class IPCServer {
 
     // MARK: - Message dispatch
 
-    private static func processMessage(_ data: Data, database: ClipsterDatabase) -> IPCResponse {
+    private static func processMessage(_ data: Data, database: ClipsterDatabase, monitor: ClipboardMonitor?) -> IPCResponse {
         let decoder = JSONDecoder()
 
         guard let command = try? decoder.decode(IPCCommand.self, from: data) else {
@@ -165,7 +168,7 @@ public final class IPCServer {
         }
 
         do {
-            let responseData = try dispatch(command: command, database: database)
+            let responseData = try Self.dispatch(command: command, database: database, monitor: monitor)
             return IPCResponse.success(id: command.id, data: responseData)
         } catch let e as IPCError {
             return IPCResponse.failure(id: command.id, error: e.errorCode)
@@ -177,7 +180,7 @@ public final class IPCServer {
 
     // MARK: - Command dispatch
 
-    private static func dispatch(command: IPCCommand, database: ClipsterDatabase) throws -> IPCResponseData {
+    private static func dispatch(command: IPCCommand, database: ClipsterDatabase, monitor: ClipboardMonitor?) throws -> IPCResponseData {
         switch command.command {
 
         case "list":
@@ -221,6 +224,21 @@ public final class IPCServer {
             guard let entry = try database.findEntry(id: id) else { throw IPCError.notFound }
             let result = try Transform.apply(transformName, to: entry.content)
             return .transform(result)
+
+        case "suppress":
+            guard let bundleID = command.params.entryID else { throw IPCError.missingParam("entry_id") }
+            monitor?.addSuppressedBundle(bundleID)
+            return .empty
+
+        case "unsuppress":
+            guard let bundleID = command.params.entryID else { throw IPCError.missingParam("entry_id") }
+            monitor?.removeSuppressedBundle(bundleID)
+            return .empty
+
+        case "suppress_list":
+            let bundles = monitor?.suppressedBundles() ?? []
+            // Return as entries format for consistency — empty list if monitor not available.
+            return .transform(bundles.joined(separator: "\n"))
 
         case "daemon_status":
             let status = IPCDaemonStatus(

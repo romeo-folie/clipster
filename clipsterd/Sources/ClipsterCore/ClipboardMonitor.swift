@@ -37,6 +37,10 @@ public final class ClipboardMonitor {
 
     private let config: ClipsterConfig
 
+    /// Runtime-mutable suppress set. Initialized from config, modified via IPC.
+    private var runtimeSuppressBundles: Set<String>
+    private let suppressLock = NSLock()
+
     // MARK: - Callback
 
     /// Called on `monitorQueue` when a clipboard change is committed (post-debounce).
@@ -47,8 +51,32 @@ public final class ClipboardMonitor {
 
     public init(config: ClipsterConfig = .default, onChange: @escaping (ClipboardEntry) -> Void) {
         self.config = config
+        self.runtimeSuppressBundles = Set(config.suppressBundles)
         self.lastChangeCount = NSPasteboard.general.changeCount
         self.onChange = onChange
+    }
+
+    // MARK: - Runtime Suppress List
+
+    /// Add a bundle ID to the runtime suppress list. Thread-safe.
+    public func addSuppressedBundle(_ bundleID: String) {
+        suppressLock.lock()
+        runtimeSuppressBundles.insert(bundleID)
+        suppressLock.unlock()
+    }
+
+    /// Remove a bundle ID from the runtime suppress list. Thread-safe.
+    public func removeSuppressedBundle(_ bundleID: String) {
+        suppressLock.lock()
+        runtimeSuppressBundles.remove(bundleID)
+        suppressLock.unlock()
+    }
+
+    /// Get the current suppress list. Thread-safe.
+    public func suppressedBundles() -> [String] {
+        suppressLock.lock()
+        defer { suppressLock.unlock() }
+        return Array(runtimeSuppressBundles).sorted()
     }
 
     // MARK: - Lifecycle
@@ -124,8 +152,16 @@ public final class ClipboardMonitor {
 
         // Password manager suppression — PRD §7.1.
         // Use the app at detection time (the app that triggered the copy).
-        if let bundleID = detectedApp?.bundleIdentifier,
-           config.suppressBundles.contains(bundleID) {
+        let isSuppressed: Bool
+        suppressLock.lock()
+        if let bundleID = detectedApp?.bundleIdentifier {
+            isSuppressed = runtimeSuppressBundles.contains(bundleID)
+        } else {
+            isSuppressed = false
+        }
+        suppressLock.unlock()
+        if isSuppressed {
+            let bundleID = detectedApp?.bundleIdentifier ?? "unknown"
             logger.debug("Suppressed entry from \(bundleID)")
             return
         }
