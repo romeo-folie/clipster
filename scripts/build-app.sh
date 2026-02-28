@@ -4,12 +4,17 @@
 # Usage: ./scripts/build-app.sh [clean|build|assemble|sign|notarise|all]
 #
 # Environment variables:
-#   VERSION        App version string (default: 0.1.0)
-#   BUILD_NUMBER   CFBundleVersion integer (default: 1)
-#   DEVELOPER_ID   Codesign identity, e.g. "Developer ID Application: Romeo Folie (TEAMID)"
-#   APPLE_ID       Apple ID email (for notarytool)
-#   TEAM_ID        Apple Developer Team ID (for notarytool)
-#   APP_PASSWORD   App-specific password from appleid.apple.com (for notarytool)
+#   VERSION          App version string (default: 0.1.0)
+#   BUILD_NUMBER     CFBundleVersion integer (default: 1)
+#   DEVELOPER_ID     Codesign identity, e.g. "Developer ID Application: Romeo Folie (TEAMID)"
+#
+#   Notarisation — choose ONE of:
+#   KEYCHAIN_PROFILE  Keychain profile name created via:
+#                       xcrun notarytool store-credentials <profile-name> \
+#                         --apple-id <email> --team-id <TEAMID> --password <app-password>
+#                     Preferred: credentials stay out of shell history and ps output.
+#   APPLE_ID + TEAM_ID + APP_PASSWORD
+#                     Fallback if keychain profile is not set up.
 #
 # Typical workflow:
 #   ./scripts/build-app.sh all          # build universal binary + assemble bundle
@@ -117,8 +122,7 @@ cmd_assemble() {
 
         ok "Sparkle.framework embedded and rpath updated"
     else
-        log "WARNING: Sparkle.framework not found in release build dir — skipping embed."
-        log "         The app will crash on launch. Run 'build' first."
+        fail "Sparkle.framework not found at $SPARKLE_ARM64 — run 'build' first. Assemble aborted."
     fi
 
     # Info.plist — inject VERSION and BUILD_NUMBER
@@ -160,19 +164,53 @@ cmd_sign() {
     [[ -d "$APP_BUNDLE" ]] || fail "$APP_BUNDLE not found — run 'assemble' first"
     [[ -f "$ENTITLEMENTS" ]] || fail "Entitlements not found at $ENTITLEMENTS"
 
-    # macOS code signing must proceed inside-out: sign embedded frameworks first,
-    # then the app bundle. Signing the outer bundle before inner frameworks
-    # invalidates the outer signature.
-    if [[ -d "$CONTENTS/Frameworks/Sparkle.framework" ]]; then
+    # macOS requires inside-out signing: every nested bundle must be signed with
+    # its own valid signature before the enclosing bundle is sealed. Signing the
+    # outer bundle first immediately invalidates inner signatures, causing
+    # Gatekeeper deep validation to reject the app.
+    #
+    # Sparkle.framework contains three levels of nesting:
+    #   Versions/B/XPCServices/Downloader.xpc   ← sign first
+    #   Versions/B/XPCServices/Installer.xpc    ← sign first
+    #   Versions/B/Updater.app                  ← sign second
+    #   Versions/B/Autoupdate                   ← sign (standalone executable)
+    #   Sparkle.framework itself                ← sign third
+    #   ClipsterApp.app (outer bundle)          ← sign last
+
+    local SPARKLE_FW="$CONTENTS/Frameworks/Sparkle.framework"
+
+    if [[ -d "$SPARKLE_FW" ]]; then
+        local SPARKLE_VB="$SPARKLE_FW/Versions/B"
+
+        # 1. XPC services (innermost)
+        for xpc in "$SPARKLE_VB/XPCServices/"*.xpc; do
+            [[ -d "$xpc" ]] || continue
+            log "Signing $(basename "$xpc")..."
+            codesign --force --options runtime \
+                --sign "$DEVELOPER_ID" --timestamp "$xpc"
+        done
+
+        # 2. Updater.app (nested app bundle inside framework)
+        if [[ -d "$SPARKLE_VB/Updater.app" ]]; then
+            log "Signing Updater.app..."
+            codesign --force --options runtime \
+                --sign "$DEVELOPER_ID" --timestamp "$SPARKLE_VB/Updater.app"
+        fi
+
+        # 3. Autoupdate standalone executable
+        if [[ -f "$SPARKLE_VB/Autoupdate" ]]; then
+            log "Signing Autoupdate..."
+            codesign --force --options runtime \
+                --sign "$DEVELOPER_ID" --timestamp "$SPARKLE_VB/Autoupdate"
+        fi
+
+        # 4. Outer Sparkle.framework (seals everything signed above)
         log "Signing Sparkle.framework..."
-        codesign \
-            --force \
-            --options runtime \
-            --sign "$DEVELOPER_ID" \
-            --timestamp \
-            "$CONTENTS/Frameworks/Sparkle.framework"
+        codesign --force --options runtime \
+            --sign "$DEVELOPER_ID" --timestamp "$SPARKLE_FW"
     fi
 
+    # 5. Outer app bundle (seals everything, including Contents/Frameworks/)
     log "Signing $APP_NAME.app with hardened runtime..."
     codesign \
         --force \
@@ -182,19 +220,15 @@ cmd_sign() {
         --timestamp \
         "$APP_BUNDLE"
 
-    log "Verifying signature..."
+    log "Verifying signature (deep)..."
     codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE" 2>&1 | grep -v "^$" || true
-    # spctl returns non-zero if not yet notarised — expected at this stage.
+    # spctl returns non-zero before notarisation — expected at this stage.
     spctl --assess --type execute --verbose "$APP_BUNDLE" 2>&1 || true
 
     ok "Signed: $APP_BUNDLE"
 }
 
 cmd_notarise() {
-    local APPLE_ID="${APPLE_ID:?Set APPLE_ID (your Apple ID email)}"
-    local TEAM_ID="${TEAM_ID:?Set TEAM_ID (Apple Developer Team ID)}"
-    local APP_PASSWORD="${APP_PASSWORD:?Set APP_PASSWORD (app-specific password from appleid.apple.com)}"
-
     [[ -d "$APP_BUNDLE" ]] || fail "$APP_BUNDLE not found — run 'assemble' and 'sign' first"
 
     local ZIP="$DIST_DIR/$APP_NAME-notarisation.zip"
@@ -203,11 +237,29 @@ cmd_notarise() {
     ditto -c -k --keepParent "$APP_BUNDLE" "$ZIP"
 
     log "Submitting to Apple notarytool (this may take a few minutes)..."
-    xcrun notarytool submit "$ZIP" \
-        --apple-id "$APPLE_ID" \
-        --team-id "$TEAM_ID" \
-        --password "$APP_PASSWORD" \
-        --wait
+
+    # Prefer --keychain-profile: credentials are stored in macOS Keychain and
+    # never appear in ps output or shell history.
+    # Setup (one-time):
+    #   xcrun notarytool store-credentials <profile-name> \
+    #     --apple-id <email> --team-id <TEAMID> --password <app-specific-password>
+    # Then: export KEYCHAIN_PROFILE=<profile-name>
+    #
+    # Fallback to --apple-id / --password when KEYCHAIN_PROFILE is not set.
+    if [[ -n "${KEYCHAIN_PROFILE:-}" ]]; then
+        xcrun notarytool submit "$ZIP" \
+            --keychain-profile "$KEYCHAIN_PROFILE" \
+            --wait
+    else
+        local APPLE_ID="${APPLE_ID:?Set KEYCHAIN_PROFILE (preferred) or APPLE_ID + TEAM_ID + APP_PASSWORD}"
+        local TEAM_ID="${TEAM_ID:?Set TEAM_ID}"
+        local APP_PASSWORD="${APP_PASSWORD:?Set APP_PASSWORD (app-specific password — use KEYCHAIN_PROFILE instead to avoid credential exposure in ps output)}"
+        xcrun notarytool submit "$ZIP" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$TEAM_ID" \
+            --password "$APP_PASSWORD" \
+            --wait
+    fi
 
     log "Stapling notarisation ticket..."
     xcrun stapler staple "$APP_BUNDLE"
@@ -243,7 +295,7 @@ case "$CMD" in
         echo "  build      Compile arm64 + x86_64 + lipo universal binary"
         echo "  assemble   Assemble .app bundle from universal binary + Info.plist"
         echo "  sign       Codesign bundle with hardened runtime (needs DEVELOPER_ID)"
-        echo "  notarise   Submit to Apple notarytool + staple (needs APPLE_ID,TEAM_ID,APP_PASSWORD)"
+        echo "  notarise   Submit to Apple notarytool + staple (set KEYCHAIN_PROFILE, or APPLE_ID+TEAM_ID+APP_PASSWORD)"
         exit 1
         ;;
 esac

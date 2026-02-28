@@ -19,11 +19,18 @@ final class UpdateManager: NSObject, SPUUpdaterDelegate {
     private let controller: SPUStandardUpdaterController
 
     override init() {
+        // Guard: if SUPublicEDKey is still the placeholder value, do not start
+        // automatic update checks. Sparkle logs Ed25519 validation errors on every
+        // launch when the key is absent or invalid, which pollutes dev console output
+        // and misleads developers. Automatic checks are benign to skip in dev builds;
+        // manual "Check for Updates…" still works once a real key is set.
+        let publicKey = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String ?? ""
+        let startUpdater = !publicKey.isEmpty && !publicKey.hasPrefix("PLACEHOLDER")
+
         // SPUStandardUpdaterController reads SUFeedURL and SUPublicEDKey from Info.plist.
-        // startingUpdater=true begins the automatic check schedule on launch.
-        // updaterDelegate=nil uses default Sparkle UI; delegate=nil uses default sheet.
+        // updaterDelegate=nil uses default Sparkle UI; userDriverDelegate=nil uses default sheet.
         controller = SPUStandardUpdaterController(
-            startingUpdater: true,
+            startingUpdater: startUpdater,
             updaterDelegate: nil,
             userDriverDelegate: nil
         )

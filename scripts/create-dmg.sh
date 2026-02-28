@@ -10,7 +10,7 @@
 #   make dmg
 #
 # Output:
-#   dist/Clipster-<VERSION>.dmg  (compressed, internet-enabled)
+#   dist/Clipster-<VERSION>.dmg  (compressed UDZO)
 #
 # After upload to GitHub Releases:
 #   1. Run: shasum -a 256 dist/Clipster-<VERSION>.dmg
@@ -87,9 +87,6 @@ hdiutil convert "$TEMP_DMG" \
     -o "$DMG_PATH" >/dev/null
 
 rm -f "$TEMP_DMG"
-
-# ─── Mark as internet-enabled (safe to open from browser/email) ──────────────
-hdiutil internet-enable -yes "$DMG_PATH" >/dev/null 2>&1 || true
 
 # ─── Summary ─────────────────────────────────────────────────────────────────
 
