@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private var eventMonitor: Any?
+    private var statusBarMenu: NSMenu?
     private let keyboardMonitor = KeyboardMonitor()
     private let viewModel = ClipboardViewModel()
     private var globalShortcut: GlobalShortcut?
@@ -32,7 +33,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             )
             button.action = #selector(togglePopover)
             button.target = self
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
+
+        // Right-click menu
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ","))
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Quit Clipster", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        statusItem.menu = nil // Set dynamically on right-click
+        statusBarMenu = menu
     }
 
     // MARK: - Popover
@@ -54,11 +64,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     @objc private func togglePopover() {
         guard let button = statusItem.button else { return }
+        let event = NSApp.currentEvent
+        // Right-click → show menu
+        if event?.type == .rightMouseUp, let menu = statusBarMenu {
+            statusItem.menu = menu
+            button.performClick(nil)
+            // Clear menu after display so left-click works normally
+            DispatchQueue.main.async { [weak self] in
+                self?.statusItem.menu = nil
+            }
+            return
+        }
+        // Left-click → toggle popover
         if popover.isShown {
             closePopover()
         } else {
             openPopover(relativeTo: button)
         }
+    }
+
+    @objc private func openSettings() {
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func openPopover(relativeTo button: NSStatusBarButton) {
