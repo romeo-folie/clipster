@@ -82,7 +82,30 @@ struct ClipboardEntryRow: View {
 
     @ViewBuilder
     private var typeIcon: some View {
-        if entry.contentType.isSFSymbol {
+        if entry.contentType == .richText {
+            // Rich text: styled A with RTF badge
+            ZStack(alignment: .bottomTrailing) {
+                Text("A")
+                    .font(.system(size: Theme.iconSize, weight: .bold))
+                    .foregroundColor(Theme.iconTint(for: colorScheme))
+                Text("RTF")
+                    .font(.system(size: 6, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 2)
+                    .background(Color.orange)
+                    .cornerRadius(2)
+                    .offset(x: 2, y: 2)
+            }
+        } else if entry.contentType == .colour {
+            // Colour: filled square tinted with the detected colour
+            RoundedRectangle(cornerRadius: 3)
+                .fill(parseColour(from: entry.content))
+                .frame(width: Theme.iconSize, height: Theme.iconSize)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(Theme.iconTint(for: colorScheme), lineWidth: 0.5)
+                )
+        } else if entry.contentType.isSFSymbol {
             Image(systemName: entry.contentType.icon)
                 .font(.system(size: Theme.iconSize))
                 .foregroundColor(Theme.iconTint(for: colorScheme))
@@ -90,6 +113,27 @@ struct ClipboardEntryRow: View {
             Text(entry.contentType.icon)
                 .font(.system(size: Theme.iconSize, weight: .medium))
                 .foregroundColor(Theme.iconTint(for: colorScheme))
+        }
+    }
+
+    /// Parse a hex colour string (#RRGGBB or #RGB) into a SwiftUI Color.
+    private func parseColour(from text: String) -> Color {
+        let hex = text.trimmingCharacters(in: .whitespaces)
+            .replacingOccurrences(of: "#", with: "")
+        guard hex.count == 6 || hex.count == 3 else { return .gray }
+        var rgb: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&rgb)
+        if hex.count == 6 {
+            return Color(
+                red: Double((rgb >> 16) & 0xFF) / 255,
+                green: Double((rgb >> 8) & 0xFF) / 255,
+                blue: Double(rgb & 0xFF) / 255
+            )
+        } else {
+            let r = Double((rgb >> 8) & 0xF) / 15
+            let g = Double((rgb >> 4) & 0xF) / 15
+            let b = Double(rgb & 0xF) / 15
+            return Color(red: r, green: g, blue: b)
         }
     }
 
