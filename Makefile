@@ -1,6 +1,7 @@
-# Makefile — Clipster CLI
+# Makefile — Clipster
 # Targets are designed to be run on macOS (arm64 or x86_64).
-# Phase 0 covers: build, test, install, sign, notarise.
+# Phase 0 covers: build, test, install, sign, notarise (clipsterd daemon).
+# Phase 3 covers: build-app, sign-app, notarise-app (Clipster.app GUI bundle).
 
 .DEFAULT_GOAL := help
 
@@ -125,6 +126,24 @@ daemon-status: ## Show daemon status
 .PHONY: logs
 logs: ## Tail daemon logs
 	tail -f /tmp/clipsterd.log
+
+# ─── App Bundle (Phase 3) ────────────────────────────────────────────────────
+
+APP_VERSION  ?= 0.1.0
+BUILD_NUMBER ?= 1
+
+.PHONY: build-app
+build-app: ## Build universal Clipster.app bundle (unsigned) — output: dist/Clipster.app
+	@chmod +x scripts/build-app.sh
+	VERSION=$(APP_VERSION) BUILD_NUMBER=$(BUILD_NUMBER) ./scripts/build-app.sh all
+
+.PHONY: sign-app
+sign-app: ## Sign Clipster.app with hardened runtime (set DEVELOPER_ID)
+	VERSION=$(APP_VERSION) BUILD_NUMBER=$(BUILD_NUMBER) ./scripts/build-app.sh sign
+
+.PHONY: notarise-app
+notarise-app: ## Notarise Clipster.app (set DEVELOPER_ID, APPLE_ID, TEAM_ID, APP_PASSWORD)
+	VERSION=$(APP_VERSION) BUILD_NUMBER=$(BUILD_NUMBER) ./scripts/build-app.sh notarise
 
 # ─── Sign & Notarise ─────────────────────────────────────────────────────────
 

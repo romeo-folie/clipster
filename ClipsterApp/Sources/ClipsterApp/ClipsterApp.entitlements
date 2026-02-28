@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened Runtime entitlements for Clipster.app.
+
+  Clipster is NOT sandboxed. Sandboxing would block:
+    - CGEventPost (Accessibility — user must approve via System Settings)
+    - Unix socket at ~/Library/Application Support/Clipster/clipster.sock
+    - NSWorkspace.frontmostApplication during debounce window
+
+  No network client entitlement — all data is local-only (per PRD §9).
+  Sparkle auto-update uses HTTPS but does NOT require
+  com.apple.security.network.client under the hardened runtime; only the
+  sandbox restriction is relevant.
+
+  If the app is ever sandboxed in a future version, the following will be needed:
+    - com.apple.security.network.client (Sparkle + any future sync)
+    - com.apple.security.temporary-exception.sbpl (IPC socket outside sandbox container)
+-->
+<plist version="1.0">
+<dict>
+    <!-- Not sandboxed — required for CGEvent paste and IPC socket -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+</dict>
+</plist>
