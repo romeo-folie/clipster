@@ -1,4 +1,5 @@
 import AppKit
+import ClipsterCore
 import SwiftUI
 
 /// AppDelegate manages the status bar item and popover panel.
@@ -23,6 +24,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         setupPopover()
         setupEventMonitor()
         setupGlobalShortcut()
+
+        // Re-sync suppress list to daemon on every launch.
+        // The daemon holds suppress state only in memory (runtime set) and reads
+        // config.ini on startup. If the daemon restarts while the app is running,
+        // or starts fresh, it loses any GUI-added suppressions. Sending the full
+        // list on our launch ensures the daemon's runtime set always reflects
+        // what the user configured — UserDefaults is the source of truth for the list.
+        syncSuppressListToDaemon()
+    }
+
+    /// Pushes every entry in the persisted suppress list to the daemon over IPC.
+    /// Safe to call on launch — the daemon deduplicates internally.
+    private func syncSuppressListToDaemon() {
+        let defaults: [String] = ["1Password", "Bitwarden", "Dashlane", "LastPass"]
+        let apps = UserDefaults.standard.stringArray(forKey: "suppressedApps") ?? defaults
+        guard !apps.isEmpty else { return }
+        DispatchQueue.global(qos: .background).async {
+            for app in apps {
+                try? IPCClient.send("suppress", params: IPCParams(entryID: app))
+            }
+        }
     }
 
     // MARK: - Status Bar

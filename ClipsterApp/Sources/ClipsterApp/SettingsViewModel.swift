@@ -131,7 +131,9 @@ final class SettingsViewModel: ObservableObject {
 
     private func saveSuppressedApps() {
         UserDefaults.standard.set(suppressedApps, forKey: "suppressedApps")
-        // TODO: Sync to clipsterd config.ini when IPC "suppress" command is available.
+        // IPC suppress/unsuppress is sent by the caller (addSuppressedApp/removeSuppressedApp).
+        // AppDelegate.syncSuppressListToDaemon() re-syncs the full list on every launch
+        // so daemon restarts never lose the persisted suppress state.
     }
 
     // MARK: - Clear History
