@@ -58,6 +58,19 @@ struct GeneralSettingsTab: View {
             }
 
             Toggle("Launch at login", isOn: $settings.launchAtLogin)
+
+            HStack {
+                Text("Updates")
+                Spacer()
+                Button("Check for Updates…") {
+                    if let url = URL(string: "https://github.com/romeo-folie/clipster/releases") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+            }
+            Text("Sparkle auto-update will be integrated in the distribution phase.")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
         .padding()
     }

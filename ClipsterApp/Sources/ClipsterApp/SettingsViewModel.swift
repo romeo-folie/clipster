@@ -1,5 +1,6 @@
 import ClipsterCore
 import Foundation
+import ServiceManagement
 import SwiftUI
 
 /// Appearance mode for the app.
@@ -14,7 +15,9 @@ final class SettingsViewModel: ObservableObject {
 
     @AppStorage("entryLimit") var entryLimit: Int = 500
     @AppStorage("dbSizeCap") var dbSizeCap: Int = 500
-    @AppStorage("launchAtLogin") var launchAtLogin: Bool = true
+    @Published var launchAtLogin: Bool = true {
+        didSet { updateLaunchAtLogin() }
+    }
     @AppStorage("appearance") var appearance: AppearanceMode = .auto
 
     // MARK: - Shortcut
@@ -36,6 +39,32 @@ final class SettingsViewModel: ObservableObject {
     init() {
         loadSuppressedApps()
         checkCLIInstalled()
+        loadLaunchAtLogin()
+    }
+
+    // MARK: - Launch at Login
+
+    private func loadLaunchAtLogin() {
+        if #available(macOS 13.0, *) {
+            launchAtLogin = SMAppService.mainApp.status == .enabled
+        }
+    }
+
+    private func updateLaunchAtLogin() {
+        if #available(macOS 13.0, *) {
+            do {
+                if launchAtLogin {
+                    try SMAppService.mainApp.register()
+                } else {
+                    try SMAppService.mainApp.unregister()
+                }
+            } catch {
+                // Registration failed — revert state.
+                DispatchQueue.main.async { [weak self] in
+                    self?.launchAtLogin = SMAppService.mainApp.status == .enabled
+                }
+            }
+        }
     }
 
     // MARK: - Suppress List
