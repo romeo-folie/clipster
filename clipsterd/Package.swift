@@ -11,6 +11,9 @@ let package = Package(
     platforms: [
         .macOS(.v13)
     ],
+    products: [
+        .library(name: "ClipsterCore", targets: ["ClipsterCore"]),
+    ],
     dependencies: [
         .package(
             url: "https://github.com/groue/GRDB.swift.git",
