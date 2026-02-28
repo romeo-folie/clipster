@@ -56,25 +56,12 @@ final class ClipboardViewModel: ObservableObject {
         }
     }
 
-    /// Appends the app name/bundle to the suppress list in the daemon config.
-    /// Takes effect on next daemon restart. Writes to ~/.config/clipster/config.ini.
+    /// Suppress app — requires IPC command not yet implemented in clipsterd.
+    /// Stubbed: logs intent. Will be wired when daemon adds "suppress" IPC command.
     func suppressApp(bundleOrName: String) {
-        guard !bundleOrName.isEmpty, bundleOrName != "Unknown" else { return }
-        let configURL = FileManager.default
-            .homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/clipster/config.ini")
-        guard let contents = try? String(contentsOf: configURL, encoding: .utf8) else { return }
-        // Avoid duplicates.
-        if contents.contains(bundleOrName) { return }
-        // Append to [privacy] section if present, otherwise append at end.
-        var updated = contents
-        if let range = contents.range(of: "suppress_bundles = [") {
-            // Insert before the closing bracket.
-            if let closeRange = contents.range(of: "]", range: range.upperBound..<contents.endIndex) {
-                updated.insert(contentsOf: "\n    \"\(bundleOrName)\",", at: closeRange.lowerBound)
-            }
-        }
-        try? updated.write(to: configURL, atomically: true, encoding: .utf8)
+        // TODO: Route through IPC once clipsterd supports a "suppress" command.
+        // Direct config file writes violate the sole-write-owner invariant.
+        print("[ClipsterApp] suppressApp requested for \(bundleOrName) — not yet supported via IPC")
     }
 
     func deleteEntry(id: String) {
@@ -98,9 +85,7 @@ final class ClipboardViewModel: ObservableObject {
         } catch {
             db = nil
             databaseAvailable = false
-            // Load sample data as fallback.
-            pinnedEntries = ClipboardEntry.samplePinned
-            historyEntries = ClipboardEntry.sampleHistory
+            // No sample data fallback — show empty state with daemon-not-running message.
         }
     }
 
@@ -138,7 +123,8 @@ extension ClipboardEntry {
     init(from stored: ClipsterCore.StoredEntry, isPinned: Bool) {
         self.id = stored.id
         self.contentType = ContentType.from(stored.contentType)
-        self.preview = stored.preview ?? stored.content
+        self.content = stored.content              // Full original clipboard content
+        self.preview = stored.preview ?? stored.content  // Truncated display text
         self.sourceApp = stored.sourceName ?? "Unknown"
         self.timestamp = Date(timeIntervalSince1970: TimeInterval(stored.createdAt))
         self.isPinned = isPinned

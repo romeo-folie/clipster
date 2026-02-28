@@ -23,9 +23,12 @@ struct FocusedTextField: NSViewRepresentable {
         if nsView.stringValue != text {
             nsView.stringValue = text
         }
-        // Grab focus when panel opens.
-        DispatchQueue.main.async {
-            nsView.window?.makeFirstResponder(nsView)
+        // Grab focus only once on initial display, not on every render cycle.
+        if !context.coordinator.hasFocused {
+            context.coordinator.hasFocused = true
+            DispatchQueue.main.async {
+                nsView.window?.makeFirstResponder(nsView)
+            }
         }
     }
 
@@ -35,6 +38,7 @@ struct FocusedTextField: NSViewRepresentable {
 
     final class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: FocusedTextField
+        var hasFocused = false
 
         init(_ parent: FocusedTextField) {
             self.parent = parent

@@ -105,7 +105,7 @@ final class KeyboardMonitor: ObservableObject {
         guard let entry = selectedEntry(viewModel: viewModel) else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(entry.preview, forType: .string)
+        pasteboard.setString(entry.content, forType: .string)
         onClose()
     }
 

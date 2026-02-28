@@ -4,7 +4,8 @@ import Foundation
 struct ClipboardEntry: Identifiable {
     let id: String
     let contentType: ContentType
-    let preview: String
+    let content: String   // Full original clipboard content (for paste/copy)
+    let preview: String   // Truncated display text
     let sourceApp: String
     let timestamp: Date
     let isPinned: Bool
@@ -53,6 +54,7 @@ extension ClipboardEntry {
         ClipboardEntry(
             id: "pin-1",
             contentType: .plainText,
+            content: "Plain text snippet that might be quite long and should truncate…",
             preview: "Plain text snippet that might be quite long and should truncate…",
             sourceApp: "Safari",
             timestamp: Date().addingTimeInterval(-3600),
@@ -61,6 +63,7 @@ extension ClipboardEntry {
         ClipboardEntry(
             id: "pin-2",
             contentType: .url,
+            content: "https://example.com/long/url/path/to/resource",
             preview: "https://example.com/long/url/path/to/resource",
             sourceApp: "Chrome",
             timestamp: Date().addingTimeInterval(-7200),
@@ -72,6 +75,7 @@ extension ClipboardEntry {
         ClipboardEntry(
             id: "hist-1",
             contentType: .code,
+            content: "console.log(\"Hello World\");",
             preview: "console.log(\"Hello World\");",
             sourceApp: "VS Code",
             timestamp: Date().addingTimeInterval(-600),
@@ -80,6 +84,7 @@ extension ClipboardEntry {
         ClipboardEntry(
             id: "hist-2",
             contentType: .email,
+            content: "example@email.com",
             preview: "example@email.com",
             sourceApp: "Safari",
             timestamp: Date().addingTimeInterval(-1800),
@@ -88,6 +93,7 @@ extension ClipboardEntry {
         ClipboardEntry(
             id: "hist-3",
             contentType: .plainText,
+            content: "Another clipboard entry with some longer text content here",
             preview: "Another clipboard entry with some longer text content here",
             sourceApp: "Notes",
             timestamp: Date().addingTimeInterval(-3000),
@@ -96,6 +102,7 @@ extension ClipboardEntry {
         ClipboardEntry(
             id: "hist-4",
             contentType: .url,
+            content: "https://github.com/romeo-folie/clipster",
             preview: "https://github.com/romeo-folie/clipster",
             sourceApp: "Firefox",
             timestamp: Date().addingTimeInterval(-4200),

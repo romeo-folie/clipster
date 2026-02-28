@@ -45,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         // Let SwiftUI environment drive the color scheme; no forced appearance here.
 
         let contentView = ClipboardPanelView(viewModel: viewModel, onPaste: { [weak self] entry in
-            PasteService.pasteToFrontApp(content: entry.preview) {
+            PasteService.pasteToFrontApp(content: entry.content) {
                 self?.closePopover()
             }
         })
@@ -71,7 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             viewModel: viewModel,
             onClose: { [weak self] in self?.closePopover() },
             onPaste: { [weak self] entry in
-                PasteService.pasteToFrontApp(content: entry.preview) {
+                PasteService.pasteToFrontApp(content: entry.content) {
                     self?.closePopover()
                 }
             }

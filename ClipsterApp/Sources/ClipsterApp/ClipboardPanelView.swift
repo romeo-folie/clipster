@@ -57,7 +57,7 @@ struct ClipboardPanelView: View {
             onCopy: {
                 let pb = NSPasteboard.general
                 pb.clearContents()
-                pb.setString(entry.preview, forType: .string)
+                pb.setString(entry.content, forType: .string)
             },
             onPaste: { onPaste?(entry) },
             onPin: { viewModel.togglePin(id: entry.id) },
