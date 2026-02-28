@@ -73,16 +73,58 @@ cmd_assemble() {
 
     log "Assembling $APP_NAME.app bundle..."
     rm -rf "$APP_BUNDLE"
-    mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
+    mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$CONTENTS/Frameworks"
 
     # Binary
     cp "$UNIVERSAL_BINARY" "$MACOS_DIR/$BINARY_NAME"
     chmod +x "$MACOS_DIR/$BINARY_NAME"
 
+    # Embed Sparkle.framework — Sparkle is a dynamic framework (@rpath-linked).
+    # SPM places a per-arch Sparkle.framework slice next to the binary in .build/.
+    # We build a universal Sparkle.framework by lipo-ing arm64 + x86_64 slices,
+    # then embed it at Contents/Frameworks/ per standard .app bundle convention.
+    # The loader rpath is updated from @loader_path (dev build dir) to
+    # @executable_path/../Frameworks (runtime .app bundle path).
+    SPARKLE_ARM64="$REPO_ROOT/ClipsterApp/.build/arm64-apple-macosx/release/Sparkle.framework"
+    SPARKLE_X86="$REPO_ROOT/ClipsterApp/.build/x86_64-apple-macosx/release/Sparkle.framework"
+    SPARKLE_DST="$CONTENTS/Frameworks/Sparkle.framework"
+
+    if [[ -d "$SPARKLE_ARM64" ]]; then
+        log "Embedding Sparkle.framework (universal)..."
+        # Use arm64 framework as the base (preserves headers, Resources, etc.)
+        cp -r "$SPARKLE_ARM64" "$SPARKLE_DST"
+
+        if [[ -d "$SPARKLE_X86" ]]; then
+            # Lipo the framework binary itself into a universal slice
+            SPARKLE_BIN="Sparkle.framework/Versions/B/Sparkle"
+            lipo -create \
+                "$SPARKLE_ARM64/$SPARKLE_BIN" \
+                "$SPARKLE_X86/$SPARKLE_BIN" \
+                -output "$SPARKLE_DST/Versions/B/Sparkle"
+            # Keep the top-level symlink in sync
+            cp "$SPARKLE_DST/Versions/B/Sparkle" "$SPARKLE_DST/Sparkle" 2>/dev/null || true
+        fi
+
+        # Fix rpath in the app binary: @loader_path resolves to MacOS/ (correct at
+        # dev time, wrong in .app). Replace with @executable_path/../Frameworks.
+        install_name_tool \
+            -delete_rpath "@loader_path" \
+            -add_rpath "@executable_path/../Frameworks" \
+            "$MACOS_DIR/$BINARY_NAME" 2>/dev/null || \
+        install_name_tool \
+            -add_rpath "@executable_path/../Frameworks" \
+            "$MACOS_DIR/$BINARY_NAME"
+
+        ok "Sparkle.framework embedded and rpath updated"
+    else
+        log "WARNING: Sparkle.framework not found in release build dir — skipping embed."
+        log "         The app will crash on launch. Run 'build' first."
+    fi
+
     # Info.plist — inject VERSION and BUILD_NUMBER
     # Replaces the placeholder values in the source Info.plist.
     # CFBundleShortVersionString: replace "0.1.0" with $VERSION
-    # CFBundleVersion: replace the first standalone "<string>1</string>" with BUILD_NUMBER
+    # CFBundleVersion: replace standalone value after CFBundleVersion key with BUILD_NUMBER
     python3 - "$INFO_PLIST_SRC" "$CONTENTS/Info.plist" "$VERSION" "$BUILD_NUMBER" <<'PYEOF'
 import sys, re
 
@@ -106,6 +148,9 @@ open(dst, 'w').write(text)
 print("  Injected version:", version, "build:", build)
 PYEOF
 
+    # PkgInfo — identifies the app type to older tools (Finder, etc.)
+    echo -n "APPL????" > "$CONTENTS/PkgInfo"
+
     ok "Bundle assembled: $APP_BUNDLE"
 }
 
@@ -114,6 +159,19 @@ cmd_sign() {
 
     [[ -d "$APP_BUNDLE" ]] || fail "$APP_BUNDLE not found — run 'assemble' first"
     [[ -f "$ENTITLEMENTS" ]] || fail "Entitlements not found at $ENTITLEMENTS"
+
+    # macOS code signing must proceed inside-out: sign embedded frameworks first,
+    # then the app bundle. Signing the outer bundle before inner frameworks
+    # invalidates the outer signature.
+    if [[ -d "$CONTENTS/Frameworks/Sparkle.framework" ]]; then
+        log "Signing Sparkle.framework..."
+        codesign \
+            --force \
+            --options runtime \
+            --sign "$DEVELOPER_ID" \
+            --timestamp \
+            "$CONTENTS/Frameworks/Sparkle.framework"
+    fi
 
     log "Signing $APP_NAME.app with hardened runtime..."
     codesign \
@@ -126,6 +184,7 @@ cmd_sign() {
 
     log "Verifying signature..."
     codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE" 2>&1 | grep -v "^$" || true
+    # spctl returns non-zero if not yet notarised — expected at this stage.
     spctl --assess --type execute --verbose "$APP_BUNDLE" 2>&1 || true
 
     ok "Signed: $APP_BUNDLE"
