@@ -9,6 +9,7 @@ struct ClipboardEntryRow: View {
     var onCopy: (() -> Void)?
     var onPaste: (() -> Void)?
     var onPin: (() -> Void)?
+    var onTransform: (() -> Void)?
     var onDelete: (() -> Void)?
     var onSuppressApp: (() -> Void)?
 
@@ -65,8 +66,7 @@ struct ClipboardEntryRow: View {
         Divider()
 
         Button(entry.isPinned ? "Unpin  ⌘P" : "Pin  ⌘P") { onPin?() }
-        Button("Transform…  Tab") { /* stub — Phase 1 */ }
-            .disabled(true)
+        Button("Transform…  Tab") { onTransform?() }
 
         Divider()
 

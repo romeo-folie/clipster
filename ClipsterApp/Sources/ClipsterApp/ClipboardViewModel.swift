@@ -6,6 +6,7 @@ import SwiftUI
 final class ClipboardViewModel: ObservableObject {
     @Published var searchQuery = ""
     @Published var selectedID: String?
+    @Published var showTransformPanel = false
     @Published var pinnedEntries: [ClipboardEntry] = []
     @Published var historyEntries: [ClipboardEntry] = []
     @Published var databaseAvailable = false

@@ -45,6 +45,32 @@ struct ClipboardPanelView: View {
         }
         .frame(width: Theme.panelWidth, height: Theme.panelHeight)
         .background(Theme.panelBackground(for: colorScheme))
+        .overlay(alignment: .bottom) {
+            if viewModel.showTransformPanel, let entry = selectedEntry {
+                TransformPanelView(
+                    entry: entry,
+                    onApply: { transformedText in
+                        viewModel.showTransformPanel = false
+                        onPaste?(ClipboardEntry(
+                            id: entry.id, contentType: entry.contentType,
+                            content: transformedText, preview: transformedText,
+                            sourceApp: entry.sourceApp, timestamp: entry.timestamp,
+                            isPinned: entry.isPinned
+                        ))
+                    },
+                    onCancel: { viewModel.showTransformPanel = false }
+                )
+                .frame(height: Theme.panelHeight * 0.55)
+                .transition(.move(edge: .bottom))
+                .animation(.easeInOut(duration: 0.2), value: viewModel.showTransformPanel)
+            }
+        }
+    }
+
+    private var selectedEntry: ClipboardEntry? {
+        guard let id = viewModel.selectedID else { return nil }
+        let all = viewModel.filteredPinned + viewModel.filteredHistory
+        return all.first(where: { $0.id == id })
     }
 
     // MARK: - Entry Row Factory
@@ -61,6 +87,10 @@ struct ClipboardPanelView: View {
             },
             onPaste: { onPaste?(entry) },
             onPin: { viewModel.togglePin(id: entry.id) },
+            onTransform: {
+                viewModel.selectedID = entry.id
+                viewModel.showTransformPanel = true
+            },
             onDelete: { viewModel.deleteEntry(id: entry.id) },
             onSuppressApp: { viewModel.suppressApp(bundleOrName: entry.sourceApp) }
         )

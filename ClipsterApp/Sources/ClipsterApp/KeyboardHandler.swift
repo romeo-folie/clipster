@@ -61,7 +61,13 @@ final class KeyboardMonitor: ObservableObject {
             }
             return true
         case 48:  // Tab
-            // Stub — transform panel is a later task.
+            DispatchQueue.main.async {
+                if viewModel.showTransformPanel {
+                    viewModel.showTransformPanel = false
+                } else {
+                    viewModel.showTransformPanel = true
+                }
+            }
             return true
         default:
             // ⌘P
