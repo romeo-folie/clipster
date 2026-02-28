@@ -145,6 +145,11 @@ sign-app: ## Sign Clipster.app with hardened runtime (set DEVELOPER_ID)
 notarise-app: ## Notarise Clipster.app (set DEVELOPER_ID, APPLE_ID, TEAM_ID, APP_PASSWORD)
 	VERSION=$(APP_VERSION) BUILD_NUMBER=$(BUILD_NUMBER) ./scripts/build-app.sh notarise
 
+.PHONY: dmg
+dmg: ## Package dist/Clipster.app into dist/Clipster-$(APP_VERSION).dmg
+	@chmod +x scripts/create-dmg.sh
+	VERSION=$(APP_VERSION) ./scripts/create-dmg.sh
+
 # ─── Sign & Notarise ─────────────────────────────────────────────────────────
 
 .PHONY: sign
