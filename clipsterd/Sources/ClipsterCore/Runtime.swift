@@ -66,7 +66,7 @@ public final class ClipsterRuntime {
                 logger.error("Failed to insert entry: \(error)")
             }
         }
-        self.ipcServer = IPCServer(database: database)
+        self.ipcServer = IPCServer(database: database, monitor: monitor)
     }
 
     public func start(version: String, pid: Int32) {

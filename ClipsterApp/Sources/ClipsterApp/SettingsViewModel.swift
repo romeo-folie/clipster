@@ -1,3 +1,4 @@
+import ClipsterCore
 import Foundation
 import SwiftUI
 
@@ -45,11 +46,18 @@ final class SettingsViewModel: ObservableObject {
         suppressedApps.append(app)
         newSuppressApp = ""
         saveSuppressedApps()
+        // Notify daemon at runtime.
+        DispatchQueue.global(qos: .userInitiated).async {
+            try? IPCClient.send("suppress", params: IPCParams(entryID: app))
+        }
     }
 
     func removeSuppressedApp(_ app: String) {
         suppressedApps.removeAll { $0 == app }
         saveSuppressedApps()
+        DispatchQueue.global(qos: .userInitiated).async {
+            try? IPCClient.send("unsuppress", params: IPCParams(entryID: app))
+        }
     }
 
     private func loadSuppressedApps() {

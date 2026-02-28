@@ -72,7 +72,6 @@ struct ClipboardEntryRow: View {
 
         if !entry.sourceApp.isEmpty && entry.sourceApp != "Unknown" {
             Button("Don't capture from \(entry.sourceApp)") { onSuppressApp?() }
-                .disabled(true) // Requires IPC command not yet in clipsterd
             Divider()
         }
 
