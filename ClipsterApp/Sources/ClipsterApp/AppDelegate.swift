@@ -42,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         popover.contentSize = NSSize(width: Theme.panelWidth, height: Theme.panelHeight)
         popover.behavior = .transient
         popover.animates = true
+        // Let SwiftUI environment drive the color scheme; no forced appearance here.
 
         let contentView = ClipboardPanelView(viewModel: viewModel, onPaste: { [weak self] entry in
             PasteService.pasteToFrontApp(content: entry.preview) {

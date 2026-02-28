@@ -14,7 +14,7 @@ struct ClipboardPanelView: View {
             Divider()
                 .background(Theme.separator(for: colorScheme))
 
-            ScrollView {
+            ScrollView(.vertical, showsIndicators: true) {
                 LazyVStack(spacing: 0, pinnedViews: []) {
                     if !viewModel.filteredPinned.isEmpty {
                         sectionHeader("PINNED")
@@ -75,10 +75,24 @@ struct ClipboardPanelView: View {
                 .foregroundColor(Theme.secondaryText(for: colorScheme))
                 .font(.system(size: 14))
 
-            TextField("Search…", text: $viewModel.searchQuery)
-                .textFieldStyle(.plain)
-                .font(Theme.primaryFont)
-                .foregroundColor(Theme.primaryText(for: colorScheme))
+            FocusedTextField(
+                text: $viewModel.searchQuery,
+                placeholder: "Search…"
+            )
+            .frame(height: 20)
+            .foregroundColor(Theme.primaryText(for: colorScheme))
+
+            if !viewModel.searchQuery.isEmpty {
+                Button {
+                    viewModel.searchQuery = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(Theme.secondaryText(for: colorScheme))
+                        .font(.system(size: 13))
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity)
+            }
         }
         .padding(.horizontal, 10)
         .frame(height: Theme.searchFieldHeight)
@@ -91,6 +105,7 @@ struct ClipboardPanelView: View {
         .padding(.horizontal, Theme.panelPadding)
         .padding(.top, Theme.panelPadding)
         .padding(.bottom, 8)
+        .animation(.easeInOut(duration: 0.15), value: viewModel.searchQuery.isEmpty)
     }
 
     // MARK: - Section Header
