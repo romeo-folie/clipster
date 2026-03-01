@@ -140,23 +140,22 @@ struct TransformPanelView: View {
 
     private func fetchPreview(transformName: String) {
         DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let response = try IPCClient.send(
+            // Try IPC first; fall back to local transform if IPC fails or returns
+            // a non-transform response (e.g. daemon doesn't know the entry ID).
+            let ipcResult: String? = {
+                guard let response = try? IPCClient.send(
                     "transform",
                     params: IPCParams(entryID: entry.id, transform: transformName)
-                )
-                DispatchQueue.main.async {
-                    if response.ok, case .transform(let result)? = response.data {
-                        previewText = result
-                        errorMessage = nil
-                    } else if let err = response.error {
-                        previewText = entry.content
-                        errorMessage = err
-                    }
-                }
-            } catch {
-                // IPC failed — fall back to local transform.
-                DispatchQueue.main.async {
+                ), response.ok, case .transform(let r)? = response.data else { return nil }
+                return r
+            }()
+
+            DispatchQueue.main.async {
+                if let result = ipcResult {
+                    previewText = result
+                    errorMessage = nil
+                } else {
+                    // IPC unavailable or entry not found — apply transform locally.
                     do {
                         previewText = try Transform.apply(transformName, to: entry.content)
                         errorMessage = nil
@@ -172,23 +171,25 @@ struct TransformPanelView: View {
     private func applyTransform(transformName: String) {
         isLoading = true
         DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let response = try IPCClient.send(
+            // (result, ipcError) — both nil means IPC unavailable, use local fallback.
+            let ipcOutcome: (result: String?, ipcError: String?) = {
+                guard let response = try? IPCClient.send(
                     "transform",
                     params: IPCParams(entryID: entry.id, transform: transformName)
-                )
-                DispatchQueue.main.async {
-                    isLoading = false
-                    if response.ok, case .transform(let result)? = response.data {
-                        onApply(result)
-                    } else if let err = response.error {
-                        errorMessage = err
-                    }
-                }
-            } catch {
-                // Fallback to local transform.
-                DispatchQueue.main.async {
-                    isLoading = false
+                ) else { return (nil, nil) }
+                if response.ok, case .transform(let r)? = response.data { return (r, nil) }
+                if let err = response.error { return (nil, err) }
+                return (nil, nil)
+            }()
+
+            DispatchQueue.main.async {
+                isLoading = false
+                if let result = ipcOutcome.result {
+                    onApply(result)
+                } else if let err = ipcOutcome.ipcError {
+                    errorMessage = err
+                } else {
+                    // IPC unavailable or entry not found — apply locally.
                     do {
                         let result = try Transform.apply(transformName, to: entry.content)
                         onApply(result)

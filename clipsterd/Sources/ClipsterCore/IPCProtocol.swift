@@ -116,7 +116,35 @@ public enum IPCResponseData: Codable {
     }
 
     public init(from decoder: Decoder) throws {
-        // Decoding is not needed server-side; stub for Codable conformance.
+        // All variants are encoded as a single JSON object whose shape identifies
+        // the case. Decode each shape in specificity order.
+        let container = try decoder.singleValueContainer()
+
+        // .transform — {"result": "..."}
+        if let d = try? container.decode([String: String].self),
+           let result = d["result"] {
+            self = .transform(result); return
+        }
+        // .deleted — {"deleted_count": N}
+        if let d = try? container.decode([String: Int].self),
+           let count = d["deleted_count"] {
+            self = .deleted(count); return
+        }
+        // .entries — {"entries": [...]}
+        if let d = try? container.decode([String: [IPCEntry]].self),
+           let list = d["entries"] {
+            self = .entries(list); return
+        }
+        // .entry — {"entry": {...}}
+        if let d = try? container.decode([String: IPCEntry].self),
+           let entry = d["entry"] {
+            self = .entry(entry); return
+        }
+        // .daemonStatus — IPCDaemonStatus struct directly
+        if let status = try? container.decode(IPCDaemonStatus.self) {
+            self = .daemonStatus(status); return
+        }
+        // .empty — {} or anything else
         self = .empty
     }
 }
