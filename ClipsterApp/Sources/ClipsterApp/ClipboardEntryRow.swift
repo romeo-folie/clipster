@@ -5,7 +5,10 @@ import SwiftUI
 struct ClipboardEntryRow: View {
     let entry: ClipboardEntry
     let isSelected: Bool
-    let colorScheme: ColorScheme
+    // Read colorScheme from the environment so it always reflects the live
+    // system appearance — passing it as a parameter can leave it stale when
+    // NSApp.appearance is changed while the panel is open.
+    @Environment(\.colorScheme) private var colorScheme
     var onCopy: (() -> Void)?
     var onPaste: (() -> Void)?
     var onPin: (() -> Void)?

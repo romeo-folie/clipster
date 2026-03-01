@@ -19,7 +19,12 @@ struct ClipboardPanelView: View {
                     if !viewModel.filteredPinned.isEmpty {
                         sectionHeader("PINNED")
                         ForEach(viewModel.filteredPinned) { entry in
-                            entryRow(for: entry)
+                            // "p-" prefix ensures pinned rows have a distinct SwiftUI
+                            // identity from the same entry in the history section.
+                            // Without this, SwiftUI may reuse the history row view
+                            // (where isPinned=false was captured) when an item is
+                            // pinned, resulting in a stale "Pin" label in the context menu.
+                            entryRow(for: entry).id("p-\(entry.id)")
                         }
                     }
 
@@ -31,7 +36,7 @@ struct ClipboardPanelView: View {
                         }
                         sectionHeader("HISTORY")
                         ForEach(viewModel.filteredHistory) { entry in
-                            entryRow(for: entry)
+                            entryRow(for: entry).id("h-\(entry.id)")
                         }
                     }
 
@@ -79,7 +84,6 @@ struct ClipboardPanelView: View {
         ClipboardEntryRow(
             entry: entry,
             isSelected: viewModel.selectedID == entry.id,
-            colorScheme: colorScheme,
             onCopy: {
                 let pb = NSPasteboard.general
                 pb.clearContents()
