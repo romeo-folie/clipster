@@ -99,18 +99,9 @@ cmd_assemble() {
         # Use arm64 framework as the base (preserves headers, Resources, etc.)
         cp -r "$SPARKLE_ARM64" "$SPARKLE_DST"
 
-        if [[ -d "$SPARKLE_X86" ]]; then
-            # Lipo the framework binary itself into a universal slice.
-            # SPARKLE_ARM64 / SPARKLE_X86 already point to Sparkle.framework —
-            # the binary lives at Versions/B/Sparkle inside that directory.
-            SPARKLE_BIN="Versions/B/Sparkle"
-            lipo -create \
-                "$SPARKLE_ARM64/$SPARKLE_BIN" \
-                "$SPARKLE_X86/$SPARKLE_BIN" \
-                -output "$SPARKLE_DST/Versions/B/Sparkle"
-            # Keep the top-level symlink in sync
-            cp "$SPARKLE_DST/Versions/B/Sparkle" "$SPARKLE_DST/Sparkle" 2>/dev/null || true
-        fi
+        # Sparkle ships a pre-built universal binary (arm64 + x86_64) in its XCFramework
+        # artifact. SPM copies the same fat binary into both arch build dirs — they are
+        # identical. No lipo step needed; the arm64 build's framework is already universal.
 
         # Fix rpath in the app binary: @loader_path resolves to MacOS/ (correct at
         # dev time, wrong in .app). Replace with @executable_path/../Frameworks.
