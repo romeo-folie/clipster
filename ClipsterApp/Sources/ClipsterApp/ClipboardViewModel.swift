@@ -131,7 +131,7 @@ extension ClipboardEntry {
         self.content = stored.content              // Full original clipboard content
         self.preview = stored.preview ?? stored.content  // Truncated display text
         self.sourceApp = stored.sourceName ?? "Unknown"
-        self.timestamp = Date(timeIntervalSince1970: TimeInterval(stored.createdAt))
+        self.timestamp = Date(timeIntervalSince1970: TimeInterval(stored.createdAt) / 1000.0)
         self.isPinned = isPinned
     }
 }
