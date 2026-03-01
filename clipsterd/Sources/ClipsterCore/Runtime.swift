@@ -113,6 +113,7 @@ public final class ClipsterRuntime {
             try database.expirySweep()
         } catch {
             logger.error("Startup expiry sweep failed: \(error)")
+            logger.warn("Expiry sweep will retry in 6 hours — stale entries may be present until then")
         }
 
         do {
@@ -131,7 +132,9 @@ public final class ClipsterRuntime {
             do {
                 try self.database.expirySweep()
             } catch {
-                logger.error("Periodic expiry sweep failed: \(error)")
+                // Use Logger.shared explicitly — `logger` is a module-level global and not
+                // a member of ClipsterRuntime, so qualifying via the type is unambiguous.
+                Logger.shared.error("Periodic expiry sweep failed: \(error)")
             }
         }
         timer.resume()

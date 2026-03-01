@@ -1,7 +1,9 @@
-import AppKit
 import ClipsterCore
 import Foundation
 import XCTest
+#if canImport(AppKit)
+import AppKit
+#endif
 
 /// Tests for ClipsterDatabase — Phase 0 coverage.
 ///
@@ -290,7 +292,9 @@ final class DatabaseTests: XCTestCase {
     }
 
     /// AC-EXP-07: Thumbnails for expired entries are cascade-deleted.
+    /// Requires AppKit for NSImage/NSBitmapImageRep; skipped on non-AppKit platforms.
     func testExpirySweepCascadesDeleteToThumbnails() throws {
+        #if canImport(AppKit)
         let db = try makeDB()
 
         // Build a 1×1 JPEG to satisfy the image entry path
@@ -323,6 +327,9 @@ final class DatabaseTests: XCTestCase {
         // ON DELETE CASCADE must have removed the thumbnail row
         let thumbAfter = try db.thumbnail(for: imageEntry.id)
         XCTAssertNil(thumbAfter, "Thumbnail must be cascade-deleted with the entry")
+        #else
+        throw XCTSkip("AC-EXP-07 requires AppKit — skipped on non-AppKit platforms")
+        #endif
     }
 
     func testPinnedEntriesSurvivePruning() throws {
