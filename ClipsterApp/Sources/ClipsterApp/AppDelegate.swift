@@ -16,6 +16,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     // the controller weakly internally and it must stay alive for the lifetime of the app.
     private let updateManager = UpdateManager()
 
+    // Daemon reconnect monitor — detects mid-session daemon restarts and re-syncs
+    // the suppress list so the user never silently loses suppression coverage.
+    private var daemonMonitorTimer: Timer?
+    private var daemonWasReachable: Bool = false
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Apply stored appearance before any windows open.
         SettingsViewModel.applyStoredAppearance()
@@ -35,10 +40,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         // list on our launch ensures the daemon's runtime set always reflects
         // what the user configured — UserDefaults is the source of truth for the list.
         syncSuppressListToDaemon()
+
+        // Start background monitor that detects daemon restarts and re-syncs.
+        startDaemonReconnectMonitor()
     }
 
     /// Pushes every entry in the persisted suppress list to the daemon over IPC.
-    /// Safe to call on launch — the daemon deduplicates internally.
+    /// Safe to call on launch and on reconnect — the daemon deduplicates internally.
     private func syncSuppressListToDaemon() {
         let defaults: [String] = ["1Password", "Bitwarden", "Dashlane", "LastPass"]
         let apps = UserDefaults.standard.stringArray(forKey: "suppressedApps") ?? defaults
@@ -46,6 +54,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         DispatchQueue.global(qos: .background).async {
             for app in apps {
                 try? IPCClient.send("suppress", params: IPCParams(entryID: app))
+            }
+        }
+    }
+
+    // MARK: - Daemon Reconnect Monitor
+
+    /// Polls `daemon_status` every 30 seconds on a background queue.
+    /// When the daemon transitions from unreachable → reachable, the full suppress
+    /// list is re-synced automatically. This covers the mid-session daemon restart
+    /// scenario where the daemon flushes its in-memory suppress set on startup.
+    ///
+    /// Cost: one lightweight IPC round-trip every 30s (< 1ms on localhost Unix socket).
+    private func startDaemonReconnectMonitor() {
+        // Mark initial state based on the launch sync attempt.
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            let reachable = (try? IPCClient.send("daemon_status")) != nil
+            DispatchQueue.main.async {
+                self?.daemonWasReachable = reachable
+            }
+        }
+
+        // Schedule a repeating timer on the main run loop. The actual IPC work
+        // dispatches to a background queue so the main thread is never blocked.
+        daemonMonitorTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+            self?.checkDaemonReachability()
+        }
+    }
+
+    private func checkDaemonReachability() {
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            let reachable = (try? IPCClient.send("daemon_status")) != nil
+
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                if reachable && !self.daemonWasReachable {
+                    // Daemon just came back — re-sync the suppress list.
+                    self.syncSuppressListToDaemon()
+                }
+                self.daemonWasReachable = reachable
             }
         }
     }
@@ -181,5 +228,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         if let monitor = eventMonitor {
             NSEvent.removeMonitor(monitor)
         }
+        daemonMonitorTimer?.invalidate()
     }
 }
