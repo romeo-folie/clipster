@@ -268,6 +268,40 @@ public final class ClipsterDatabase {
         }
     }
 
+    /// Hard-delete entries older than 30 days. Pinned entries are exempt.
+    ///
+    /// Called by `ClipsterRuntime` on startup and every 6 hours (PRD §7.3.7).
+    /// Cascade delete of thumbnails is handled by the `ON DELETE CASCADE` FK
+    /// on the `thumbnails` table — no explicit thumbnail query needed.
+    ///
+    /// - Returns: Number of rows deleted.
+    /// PRD §7.2.1 / §7.3.7 / AC-EXP-01–07
+    @discardableResult
+    public func expirySweep() throws -> Int {
+        let thirtyDaysMs: Int64 = 30 * 24 * 60 * 60 * 1000
+        let cutoffMs = Int64(Date().timeIntervalSince1970 * 1000) - thirtyDaysMs
+
+        let deleted = try dbQueue.write { db -> Int in
+            try db.execute(
+                sql: """
+                    DELETE FROM entries
+                    WHERE created_at < ?
+                      AND is_pinned = 0
+                """,
+                arguments: [cutoffMs]
+            )
+            return db.changesCount
+        }
+
+        if deleted > 0 {
+            logger.info("Expiry sweep: deleted \(deleted) entries older than 30 days")
+        } else {
+            logger.info("Expiry sweep: no expired entries")
+        }
+
+        return deleted
+    }
+
     /// Delete a single entry by ID.
     public func delete(id: String) throws {
         try dbQueue.write { db in

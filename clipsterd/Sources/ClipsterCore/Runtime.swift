@@ -51,6 +51,10 @@ public final class ClipsterRuntime {
     private let monitor: ClipboardMonitor
     private let ipcServer: IPCServer
 
+    /// Repeating timer that fires every 6 hours to sweep expired entries.
+    /// Retained here so it can be cancelled on `stop()`.
+    private var expiryTimer: DispatchSourceTimer?
+
     public init(options: RuntimeOptions) throws {
         self.options = options
 
@@ -104,6 +108,13 @@ public final class ClipsterRuntime {
         monitor.start()
         logger.info("Clipboard monitor started — poll: \(Int(monitor.pollInterval * 1000))ms, debounce: \(Int(monitor.debounceDelay * 1000))ms")
 
+        // PRD §7.3.7 — startup expiry sweep (runs before first IPC connection).
+        do {
+            try database.expirySweep()
+        } catch {
+            logger.error("Startup expiry sweep failed: \(error)")
+        }
+
         do {
             try ipcServer.start()
         } catch {
@@ -111,10 +122,27 @@ public final class ClipsterRuntime {
             logger.warn("Continuing without IPC; CLI will fall back to SQLite read-only mode")
         }
 
+        // PRD §7.3.7 — periodic expiry sweep every 6 hours.
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+        let sixHoursNs = DispatchTimeInterval.seconds(6 * 60 * 60)
+        timer.schedule(deadline: .now() + sixHoursNs, repeating: sixHoursNs)
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            do {
+                try self.database.expirySweep()
+            } catch {
+                logger.error("Periodic expiry sweep failed: \(error)")
+            }
+        }
+        timer.resume()
+        expiryTimer = timer
+
         logger.info("clipsterd ready")
     }
 
     public func stop() {
+        expiryTimer?.cancel()
+        expiryTimer = nil
         ipcServer.stop()
         monitor.stop()
     }
