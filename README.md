@@ -1,6 +1,6 @@
 # Clipster
 
-A macOS clipboard manager for terminal-native workflows.
+A modern macOS clipboard manager — menu bar app and CLI/TUI for terminal-native workflows.
 
 ```
 clipster              # open TUI history browser
@@ -9,7 +9,7 @@ clipster pins         # list pinned entries
 clipster daemon status
 ```
 
-Free and open source. No GUI app, no menu bar, no cloud sync.
+Free and open source. All data stays local — no cloud sync, no telemetry.
 
 ---
 
@@ -31,6 +31,7 @@ graph LR
 
 | Component | Language | Role |
 |-----------|----------|------|
+| `Clipster.app` | Swift + SwiftUI | Menu bar GUI — history panel, search, transforms, settings |
 | `clipsterd` | Swift | Headless daemon — clipboard monitoring, SQLite storage, IPC server |
 | `clipster` | Go | CLI/TUI client — reads history, transforms, daemon management |
 
@@ -49,18 +50,38 @@ graph LR
 
 ## Install
 
+### Homebrew (recommended)
+
 ```sh
-# From source (requires Swift + Go)
+brew tap romeo-folie/clipster
+brew install --cask clipster
+```
+
+This installs `Clipster.app` (menu bar GUI + embedded daemon). The `clipster` CLI is available separately:
+
+```sh
+brew install romeo-folie/clipster/clipster
+```
+
+### DMG
+
+Download the latest `.dmg` from [GitHub Releases](https://github.com/romeo-folie/clipster/releases), open it, and drag `Clipster.app` to `/Applications`.
+
+### From source
+
+```sh
+# Requires: macOS 13+, Xcode 16+, Go 1.22+
 git clone https://github.com/romeo-folie/clipster
 cd clipster
+
+# CLI + daemon only
 make install
 make install-launchagent
 
-# Or with the install script
-bash scripts/install.sh --build-from-source
+# GUI app bundle (unsigned — for development)
+make build-app
+open dist/Clipster.app
 ```
-
-The install script also handles binary downloads from GitHub Releases (once releases are published).
 
 ---
 

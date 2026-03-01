@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Info.plist for Clipster.app
+
+  LSUIElement = YES  →  menu bar–only agent, no Dock icon.
+  NSPrincipalClass   →  required for NSApp initialisation with AppKit.
+  NSPasteboardUsageDescription / NSAccessibilityUsageDescription
+    →  surfaced by macOS when requesting TCC permissions.
+  SUFeedURL / SUPublicEDKey  →  Sparkle auto-update (Phase 3.2).
+    Replace PLACEHOLDER_REPLACE_WITH_GENERATED_KEY with the output of
+    `./dist/Sparkle/bin/generate_keys` before shipping.
+-->
+<plist version="1.0">
+<dict>
+    <!-- Identity -->
+    <key>CFBundleIdentifier</key>
+    <string>com.clipster.app</string>
+    <key>CFBundleName</key>
+    <string>Clipster</string>
+    <key>CFBundleDisplayName</key>
+    <string>Clipster</string>
+    <key>CFBundleExecutable</key>
+    <string>ClipsterApp</string>
+
+    <!-- Version — injected by build-app.sh at bundle assembly time -->
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+
+    <!-- Bundle type -->
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+
+    <!-- Menu bar agent — no Dock icon -->
+    <key>LSUIElement</key>
+    <true/>
+
+    <!-- AppKit entry point -->
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+
+    <!-- High-DPI -->
+    <key>NSHighResolutionCapable</key>
+    <true/>
+
+    <!-- Minimum macOS version (per PRD §13 Phase 0 confirmation: macOS 13) -->
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+
+    <!-- Human-readable description (used by Gatekeeper quarantine prompts) -->
+    <key>NSHumanReadableDescription</key>
+    <string>A modern macOS clipboard manager. Open source, local-only, no telemetry.</string>
+
+    <!-- TCC usage strings — surfaced when system requests user approval -->
+    <key>NSPasteboardUsageDescription</key>
+    <string>Clipster captures your clipboard history so you can paste anything from the past.</string>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>Clipster uses Accessibility access to paste entries directly into other apps via keyboard simulation.</string>
+
+    <!-- ─── Sparkle auto-update (Phase 3.2) ──────────────────────────────── -->
+    <key>SUFeedURL</key>
+    <string>https://github.com/romeo-folie/clipster/releases/latest/download/appcast.xml</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <!-- Replace this with the public key from: ./dist/Sparkle/bin/generate_keys -->
+    <key>SUPublicEDKey</key>
+    <string>PLACEHOLDER_REPLACE_WITH_GENERATED_KEY</string>
+</dict>
+</plist>
