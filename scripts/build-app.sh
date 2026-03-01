@@ -100,8 +100,10 @@ cmd_assemble() {
         cp -r "$SPARKLE_ARM64" "$SPARKLE_DST"
 
         if [[ -d "$SPARKLE_X86" ]]; then
-            # Lipo the framework binary itself into a universal slice
-            SPARKLE_BIN="Sparkle.framework/Versions/B/Sparkle"
+            # Lipo the framework binary itself into a universal slice.
+            # SPARKLE_ARM64 / SPARKLE_X86 already point to Sparkle.framework —
+            # the binary lives at Versions/B/Sparkle inside that directory.
+            SPARKLE_BIN="Versions/B/Sparkle"
             lipo -create \
                 "$SPARKLE_ARM64/$SPARKLE_BIN" \
                 "$SPARKLE_X86/$SPARKLE_BIN" \
