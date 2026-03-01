@@ -1,6 +1,6 @@
 # PRD — Clipster CLI (Codename: Clipster CLI)
 
-**Author:** Pam | **Date:** 2026-02-24 | **Status:** Draft v1 (CLI Phase) | **Owner:** Romeo Folie
+**Author:** Pam | **Date:** 2026-02-24 | **Updated:** 2026-03-01 | **Status:** Draft v2 (CLI Phase) | **Owner:** Romeo Folie
 
 ---
 
@@ -170,6 +170,8 @@ CREATE TABLE entries (
   content_hash   TEXT NOT NULL             -- SHA-256 of raw content
 );
 
+CREATE INDEX idx_entries_created_at ON entries(created_at);
+
 CREATE TABLE thumbnails (
   entry_id  TEXT PRIMARY KEY REFERENCES entries(id) ON DELETE CASCADE,
   data      BLOB NOT NULL                 -- JPEG, max 400px wide, 2MB
@@ -192,6 +194,20 @@ CREATE TABLE thumbnails (
 **Images:** Max 2MB raw. Stored as JPEG thumbnail at max 400px width.
 
 **Migrations:** Versioned migration system (GRDB migrations). Each migration is numbered and idempotent.
+
+#### 7.2.1 Entry Expiry
+
+Entries older than **30 days** are automatically hard-deleted from the database. This is a non-configurable retention window — there is no user-facing setting to change it.
+
+**Rules:**
+- Expiry is calculated from `created_at` (Unix timestamp ms). An entry expires when `now() - created_at > 30 days`.
+- **Pinned entries are exempt.** An entry with `is_pinned = 1` is never expired, regardless of age.
+- Expired entries are permanently removed (`DELETE FROM entries WHERE ...`). There is no soft-delete, no archive, and no recovery mechanism.
+- Associated thumbnails are cascade-deleted via the `ON DELETE CASCADE` foreign key on the `thumbnails` table.
+
+**Sweep mechanism:** See §7.3.7.
+
+> **Future consideration:** If entry expiry becomes user-configurable, add `[history] retention_days` to `config.toml`. For now, the 30-day window is hardcoded in `clipsterd`.
 
 ---
 
@@ -280,9 +296,38 @@ Both stdout and stderr are directed here. The log level is controlled by `[daemo
 3. Run VACUUM if DB size > 80% of cap
 4. Bind Unix socket at `~/Library/Application Support/Clipster/clipster.sock`
 5. Begin NSPasteboard polling loop (250ms interval)
-6. Accept IPC connections from `clipster`
+6. Run entry expiry sweep (§7.3.7) — delete entries older than 30 days
+7. Accept IPC connections from `clipster`
 
-#### 7.3.7 Shutdown Sequence
+#### 7.3.7 Entry Expiry Sweep
+
+`clipsterd` runs a periodic background sweep to hard-delete entries older than 30 days.
+
+**Schedule:**
+- **On startup:** Immediately after the startup sequence (step 6 above) completes, before the first IPC connection is accepted.
+- **While running:** Every **6 hours** (21,600 seconds) via a repeating timer.
+
+**Sweep query:**
+
+```sql
+DELETE FROM entries
+WHERE created_at < :cutoff_ms
+  AND is_pinned = 0;
+```
+
+Where `:cutoff_ms` = `current_time_ms - (30 * 24 * 60 * 60 * 1000)`.
+
+**Logging:** Each sweep logs the number of entries deleted:
+- `"Expiry sweep: deleted 42 entries older than 30 days"` (if entries were deleted)
+- `"Expiry sweep: no expired entries"` (if none were deleted)
+
+Log level: `info`.
+
+**Performance:** The sweep runs in a single SQL transaction. With the `idx_entries_created_at` index, the query is O(log n) on the index scan. The sweep should complete in <100ms for databases at the default 500-entry cap.
+
+**No user interaction:** The sweep is silent — no notification, no confirmation prompt, no IPC event. Entries simply disappear from history on the next `list` query.
+
+#### 7.3.8 Shutdown Sequence
 
 On SIGTERM (sent by launchd or `clipster daemon stop`):
 
@@ -330,6 +375,8 @@ log_level = "info"         # debug | info | warn | error
 | `daemon.log_level` | string | `"info"` | `"debug"`, `"info"`, `"warn"`, `"error"` |
 
 **Validation:** `clipsterd` validates the config at startup. If a field has an invalid value, `clipsterd` logs a warning, uses the default for that field, and continues (it does not exit on invalid config). This prevents a bad config edit from taking the daemon down permanently.
+
+> **Note:** Entry expiry (30-day retention) is not configurable via `config.toml` in this version. If user-configurable retention is added later, it will use `[history] retention_days`.
 
 ---
 
@@ -704,7 +751,19 @@ All performance targets measured on a clean system (no other heavy processes) wi
 | AC-CFG-04 | Invalid `log_level` value falls back to `"info"` with a log warning | Daemon starts; log contains warning about invalid value |
 | AC-CFG-05 | Config changes made while daemon is running have **no effect** until restart | Verify by changing limit, observing no immediate effect, then restarting |
 
-### 10.8 Install / Uninstall
+### 10.8 Entry Expiry
+
+| ID | Criteria | Pass condition |
+|---|---|---|
+| AC-EXP-01 | Entries older than 30 days are deleted on daemon startup | Insert entry with `created_at` = 31 days ago; start daemon; entry absent from DB |
+| AC-EXP-02 | Entries exactly 30 days old are **not** deleted | Insert entry with `created_at` = 30 days ago (to the second); verify entry survives sweep |
+| AC-EXP-03 | Pinned entries older than 30 days are **not** deleted | Pin an entry, backdate to 60 days ago; run sweep; entry still present with `is_pinned = 1` |
+| AC-EXP-04 | Periodic sweep runs every 6 hours while daemon is active | Run daemon for >6h (or mock timer); verify second sweep executes and logs result |
+| AC-EXP-05 | Sweep logs the count of deleted entries at `info` level | Check `/tmp/clipsterd.log` for "Expiry sweep: deleted N entries" after sweep with expired entries |
+| AC-EXP-06 | Sweep with no expired entries logs "no expired entries" | Start daemon with all entries <30 days old; verify log line |
+| AC-EXP-07 | Thumbnails for expired entries are cascade-deleted | Insert image entry with thumbnail, backdate >30 days; run sweep; verify both `entries` and `thumbnails` rows absent |
+
+### 10.9 Install / Uninstall
 
 | ID | Criteria | Pass condition |
 |---|---|---|
