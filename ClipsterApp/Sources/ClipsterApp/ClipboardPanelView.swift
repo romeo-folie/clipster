@@ -14,38 +14,50 @@ struct ClipboardPanelView: View {
             Divider()
                 .background(Theme.separator(for: colorScheme))
 
-            ScrollView(.vertical, showsIndicators: true) {
-                LazyVStack(spacing: 0, pinnedViews: []) {
-                    if !viewModel.filteredPinned.isEmpty {
-                        sectionHeader("PINNED")
-                        ForEach(viewModel.filteredPinned) { entry in
-                            // "p-" prefix ensures pinned rows have a distinct SwiftUI
-                            // identity from the same entry in the history section.
-                            // Without this, SwiftUI may reuse the history row view
-                            // (where isPinned=false was captured) when an item is
-                            // pinned, resulting in a stale "Pin" label in the context menu.
-                            entryRow(for: entry).id("p-\(entry.id)")
-                        }
-                    }
-
-                    if !viewModel.filteredHistory.isEmpty {
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: true) {
+                    LazyVStack(spacing: 0, pinnedViews: []) {
                         if !viewModel.filteredPinned.isEmpty {
-                            Divider()
-                                .background(Theme.separator(for: colorScheme))
-                                .padding(.vertical, 4)
+                            sectionHeader("PINNED")
+                            ForEach(viewModel.filteredPinned) { entry in
+                                // "p-" prefix ensures pinned rows have a distinct SwiftUI
+                                // identity from the same entry in the history section.
+                                // Without this, SwiftUI may reuse the history row view
+                                // (where isPinned=false was captured) when an item is
+                                // pinned, resulting in a stale "Pin" label in the context menu.
+                                entryRow(for: entry).id("p-\(entry.id)")
+                            }
                         }
-                        sectionHeader("HISTORY")
-                        ForEach(viewModel.filteredHistory) { entry in
-                            entryRow(for: entry).id("h-\(entry.id)")
+
+                        if !viewModel.filteredHistory.isEmpty {
+                            if !viewModel.filteredPinned.isEmpty {
+                                Divider()
+                                    .background(Theme.separator(for: colorScheme))
+                                    .padding(.vertical, 4)
+                            }
+                            sectionHeader("HISTORY")
+                            ForEach(viewModel.filteredHistory) { entry in
+                                entryRow(for: entry).id("h-\(entry.id)")
+                            }
+                        }
+
+                        // Empty states
+                        if viewModel.filteredPinned.isEmpty && viewModel.filteredHistory.isEmpty {
+                            emptyState
                         }
                     }
-
-                    // Empty states
-                    if viewModel.filteredPinned.isEmpty && viewModel.filteredHistory.isEmpty {
-                        emptyState
+                    .padding(.bottom, Theme.panelPadding)
+                }
+                // Scroll to keep the selected row in view whenever the selection changes.
+                // anchor: nil scrolls the minimum amount needed — no jarring jumps to centre.
+                .onChange(of: viewModel.selectedID) { id in
+                    guard let id = id else { return }
+                    let isPinned = viewModel.filteredPinned.contains(where: { $0.id == id })
+                    let rowID = isPinned ? "p-\(id)" : "h-\(id)"
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        proxy.scrollTo(rowID, anchor: nil)
                     }
                 }
-                .padding(.bottom, Theme.panelPadding)
             }
         }
         .frame(width: Theme.panelWidth, height: Theme.panelHeight)
