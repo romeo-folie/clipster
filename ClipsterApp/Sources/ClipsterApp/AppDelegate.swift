@@ -169,7 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
 
     private func openPopover(relativeTo button: NSStatusBarButton) {
-        viewModel.refresh()
+        viewModel.refresh(resetSelection: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         NSApp.activate(ignoringOtherApps: true)
 

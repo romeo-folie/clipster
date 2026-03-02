@@ -94,7 +94,7 @@ final class ClipboardViewModel: ObservableObject {
         }
     }
 
-    func refresh() {
+    func refresh(resetSelection: Bool = false) {
         guard let db = db else { return }
         // DB reads happen on a background queue; UI updates are dispatched to main.
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -106,6 +106,10 @@ final class ClipboardViewModel: ObservableObject {
                     self?.historyEntries = history
                         .filter { !$0.isPinned }
                         .map { ClipboardEntry(from: $0, isPinned: false) }
+                    if resetSelection {
+                        self?.selectedID = self?.filteredPinned.first?.id
+                            ?? self?.filteredHistory.first?.id
+                    }
                 }
             } catch {
                 // Refresh failed — keep existing data.
