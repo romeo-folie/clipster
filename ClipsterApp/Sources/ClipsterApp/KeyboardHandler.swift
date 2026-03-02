@@ -93,12 +93,6 @@ final class KeyboardMonitor: ObservableObject {
             viewModel.selectedID = allEntries.first?.id
         }
 
-        // When the user navigates into the list, resign the search field so the
-        // blinking cursor disappears and focus clearly belongs to the list.
-        // makeFirstResponder(nil) is a no-op if the search field isn't first responder.
-        DispatchQueue.main.async {
-            NSApp.keyWindow?.makeFirstResponder(nil)
-        }
     }
 
     // MARK: - Actions
