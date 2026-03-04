@@ -69,6 +69,6 @@
     <true/>
     <!-- Replace this with the public key from: ./dist/Sparkle/bin/generate_keys -->
     <key>SUPublicEDKey</key>
-    <string>PLACEHOLDER_REPLACE_WITH_GENERATED_KEY</string>
+    <string>qUQ3dQTjmr6sN8rISP30Tvwk+de7FXgr+G5cCjGJl0w=</string>
 </dict>
 </plist>
