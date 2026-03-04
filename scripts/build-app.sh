@@ -96,8 +96,9 @@ cmd_assemble() {
 
     if [[ -d "$SPARKLE_ARM64" ]]; then
         log "Embedding Sparkle.framework (universal)..."
-        # Use arm64 framework as the base (preserves headers, Resources, etc.)
-        cp -r "$SPARKLE_ARM64" "$SPARKLE_DST"
+        # Use arm64 framework as the base (preserves symlinks, headers, Resources, etc.)
+        # IMPORTANT: use ditto, not cp -r, so framework symlink layout stays intact.
+        ditto "$SPARKLE_ARM64" "$SPARKLE_DST"
 
         # Sparkle ships a pre-built universal binary (arm64 + x86_64) in its XCFramework
         # artifact. SPM copies the same fat binary into both arch build dirs — they are
