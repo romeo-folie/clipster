@@ -226,34 +226,79 @@ cmd_notarise() {
     [[ -d "$APP_BUNDLE" ]] || fail "$APP_BUNDLE not found — run 'assemble' and 'sign' first"
 
     local ZIP="$DIST_DIR/$APP_NAME-notarisation.zip"
+    local NOTARY_TIMEOUT_MINUTES="${NOTARY_TIMEOUT_MINUTES:-45}"
+    local NOTARY_POLL_SECONDS="${NOTARY_POLL_SECONDS:-60}"
 
     log "Zipping bundle for submission..."
     ditto -c -k --keepParent "$APP_BUNDLE" "$ZIP"
 
-    log "Submitting to Apple notarytool (this may take a few minutes)..."
+    log "Submitting to Apple notarytool..."
 
-    # Prefer --keychain-profile: credentials are stored in macOS Keychain and
-    # never appear in ps output or shell history.
-    # Setup (one-time):
-    #   xcrun notarytool store-credentials <profile-name> \
-    #     --apple-id <email> --team-id <TEAMID> --password <app-specific-password>
-    # Then: export KEYCHAIN_PROFILE=<profile-name>
-    #
-    # Fallback to --apple-id / --password when KEYCHAIN_PROFILE is not set.
+    # Build auth args once so submit/info/log use identical auth mode.
+    local -a NOTARY_AUTH_ARGS=()
     if [[ -n "${KEYCHAIN_PROFILE:-}" ]]; then
-        xcrun notarytool submit "$ZIP" \
-            --keychain-profile "$KEYCHAIN_PROFILE" \
-            --wait
+        NOTARY_AUTH_ARGS+=(--keychain-profile "$KEYCHAIN_PROFILE")
     else
         local APPLE_ID="${APPLE_ID:?Set KEYCHAIN_PROFILE (preferred) or APPLE_ID + TEAM_ID + APP_PASSWORD}"
         local TEAM_ID="${TEAM_ID:?Set TEAM_ID}"
         local APP_PASSWORD="${APP_PASSWORD:?Set APP_PASSWORD (app-specific password — use KEYCHAIN_PROFILE instead to avoid credential exposure in ps output)}"
-        xcrun notarytool submit "$ZIP" \
-            --apple-id "$APPLE_ID" \
-            --team-id "$TEAM_ID" \
-            --password "$APP_PASSWORD" \
-            --wait
+        NOTARY_AUTH_ARGS+=(--apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APP_PASSWORD")
     fi
+
+    local SUBMIT_JSON
+    SUBMIT_JSON="$(xcrun notarytool submit "$ZIP" "${NOTARY_AUTH_ARGS[@]}" --output-format json)" || fail "Notary submission failed"
+
+    local SUBMISSION_ID
+    SUBMISSION_ID="$(python3 - <<'PYEOF' "$SUBMIT_JSON"
+import json, sys
+try:
+    print(json.loads(sys.argv[1])["id"])
+except Exception:
+    print("")
+PYEOF
+)"
+    [[ -n "$SUBMISSION_ID" ]] || fail "Could not parse submission id from notarytool output"
+
+    ok "Submission ID: $SUBMISSION_ID"
+    log "Polling notary status (timeout=${NOTARY_TIMEOUT_MINUTES}m, interval=${NOTARY_POLL_SECONDS}s)..."
+
+    local deadline=$(( $(date +%s) + NOTARY_TIMEOUT_MINUTES * 60 ))
+    local status=""
+    while [[ $(date +%s) -lt $deadline ]]; do
+        local INFO_JSON
+        INFO_JSON="$(xcrun notarytool info "$SUBMISSION_ID" "${NOTARY_AUTH_ARGS[@]}" --output-format json)" || true
+        status="$(python3 - <<'PYEOF' "$INFO_JSON"
+import json, sys
+try:
+    print(json.loads(sys.argv[1]).get("status", ""))
+except Exception:
+    print("")
+PYEOF
+)"
+
+        case "$status" in
+            Accepted)
+                ok "Notary status: Accepted"
+                break
+                ;;
+            Invalid)
+                log "Notary status: Invalid"
+                log "Fetching rejection log..."
+                xcrun notarytool log "$SUBMISSION_ID" "${NOTARY_AUTH_ARGS[@]}" || true
+                fail "Notarisation rejected (submission $SUBMISSION_ID)"
+                ;;
+            "In Progress"|"Uploaded"|"")
+                log "Current status: ${status:-unknown}"
+                sleep "$NOTARY_POLL_SECONDS"
+                ;;
+            *)
+                log "Current status: $status"
+                sleep "$NOTARY_POLL_SECONDS"
+                ;;
+        esac
+    done
+
+    [[ "$status" == "Accepted" ]] || fail "Timed out waiting for notarisation (submission $SUBMISSION_ID). Check: xcrun notarytool info $SUBMISSION_ID"
 
     log "Stapling notarisation ticket..."
     xcrun stapler staple "$APP_BUNDLE"
