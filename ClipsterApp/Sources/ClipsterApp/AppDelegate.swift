@@ -131,9 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         // Let SwiftUI environment drive the color scheme; no forced appearance here.
 
         let contentView = ClipboardPanelView(viewModel: viewModel, onPaste: { [weak self] entry in
-            PasteService.pasteToFrontApp(content: entry.content) {
-                self?.closePopover()
-            }
+            self?.paste(entry: entry)
         })
         popover.contentViewController = NSHostingController(rootView: contentView)
     }
@@ -178,9 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             viewModel: viewModel,
             onClose: { [weak self] in self?.closePopover() },
             onPaste: { [weak self] entry in
-                PasteService.pasteToFrontApp(content: entry.content) {
-                    self?.closePopover()
-                }
+                self?.paste(entry: entry)
             }
         )
     }
@@ -205,6 +201,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
               let keyCode = UInt16(parts[0]),
               let modRaw = UInt64(parts[1]) else { return nil }
         return GlobalShortcut.Shortcut(keyCode: keyCode, modifiers: CGEventFlags(rawValue: modRaw))
+    }
+
+    // MARK: - Paste
+
+    /// Paste the selected entry to the frontmost app.
+    ///
+    /// Image entries are pasted as TIFF/PNG image data fetched from the thumbnail store.
+    /// All other entry types are pasted as plain text.
+    private func paste(entry: ClipboardEntry) {
+        if entry.contentType == .image,
+           let jpegData = viewModel.thumbnailData(for: entry.id) {
+            PasteService.pasteImageToFrontApp(jpegData: jpegData) { [weak self] in
+                self?.closePopover()
+            }
+        } else {
+            PasteService.pasteToFrontApp(content: entry.content) { [weak self] in
+                self?.closePopover()
+            }
+        }
     }
 
     func closePopover() {

@@ -112,7 +112,22 @@ final class KeyboardMonitor: ObservableObject {
         guard let entry = selectedEntry(viewModel: viewModel) else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(entry.content, forType: .string)
+
+        if entry.contentType == .image,
+           let jpegData = viewModel.thumbnailData(for: entry.id),
+           let image = NSImage(data: jpegData) {
+            if let tiff = image.tiffRepresentation {
+                pasteboard.setData(tiff, forType: .tiff)
+            }
+            if let tiff = image.tiffRepresentation,
+               let bitmap = NSBitmapImageRep(data: tiff),
+               let png = bitmap.representation(using: .png, properties: [:]) {
+                pasteboard.setData(png, forType: NSPasteboard.PasteboardType("public.png"))
+            }
+        } else {
+            pasteboard.setString(entry.content, forType: .string)
+        }
+
         onClose()
     }
 
