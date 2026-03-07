@@ -235,16 +235,30 @@ public enum ContentClassifier {
     }
 
     private static func richText(from pb: NSPasteboard) -> String? {
-        // RTF
+        // RTF — unambiguous rich-text format; always capture.
         if let rtfData = pb.data(forType: .rtf),
            let str = NSAttributedString(rtf: rtfData, documentAttributes: nil) {
             return str.string.isEmpty ? nil : str.string
         }
-        // HTML
+
+        // HTML — only capture when plain text is NOT also present on the pasteboard.
+        //
+        // When an app (Slack, Chrome, etc.) copies selected text it writes both
+        // `public.html` and `public.utf8-plain-text`. The HTML is an incidental
+        // render artefact — what the user actually copied is the plain text.
+        // Capturing the HTML in this case stores `<meta charset='utf-8'><div …`
+        // junk instead of the readable content.
+        //
+        // When only `public.html` is present (e.g. "Copy as HTML" from a code
+        // editor, or a clipboard utility that writes HTML exclusively), the user
+        // deliberately copied HTML source — keep it.
         if let htmlData = pb.data(forType: .html),
            let html = String(data: htmlData, encoding: .utf8), !html.isEmpty {
+            // Plain text counterpart present → skip; step 4 will read the clean string.
+            if pb.string(forType: .string) != nil { return nil }
             return html
         }
+
         return nil
     }
 }
