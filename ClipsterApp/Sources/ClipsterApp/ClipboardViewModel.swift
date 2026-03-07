@@ -69,6 +69,11 @@ final class ClipboardViewModel: ObservableObject {
         }
     }
 
+    /// Fetch thumbnail JPEG data for an image entry, or nil if unavailable.
+    func thumbnailData(for id: String) -> Data? {
+        try? db?.thumbnail(for: id)
+    }
+
     func deleteEntry(id: String) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             do {
