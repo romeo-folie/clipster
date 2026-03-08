@@ -222,8 +222,9 @@ cmd_sign() {
         EXPECTED_TEAM="$(echo "$DEVELOPER_ID" | grep -oE '\([A-Z0-9]+\)$' | tr -d '()')"
         if [[ -n "$EXPECTED_TEAM" ]]; then
             log "Verifying Sparkle dylib TeamIdentifier=$EXPECTED_TEAM..."
-            codesign -dv --verbose=4 "$SPARKLE_VB/Sparkle" 2>&1 \
-                | grep -q "TeamIdentifier=$EXPECTED_TEAM" \
+            local SPARKLE_SIG
+            SPARKLE_SIG="$(codesign -dv --verbose=4 "$SPARKLE_VB/Sparkle" 2>&1 || true)"
+            echo "$SPARKLE_SIG" | grep -q "TeamIdentifier=$EXPECTED_TEAM" \
                 || fail "Sparkle dylib TeamIdentifier mismatch — check DEVELOPER_ID env var and that the cert is in your keychain"
         fi
     fi
