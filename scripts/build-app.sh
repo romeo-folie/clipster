@@ -213,10 +213,19 @@ cmd_sign() {
             --sign "$DEVELOPER_ID" --timestamp "$SPARKLE_FW"
 
         # Verify Sparkle is now signed with OUR cert (not Sparkle's own).
-        # Fail fast here — if Sparkle re-signing failed we must not notarise.
-        log "Verifying Sparkle.framework re-signed with Developer ID..."
-        codesign -dv "$SPARKLE_FW" 2>&1 | grep "Developer ID Application" \
-            || fail "Sparkle.framework is not signed with your Developer ID — check DEVELOPER_ID env var and cert"
+        # We grep for TeamIdentifier in the main dylib's signature — codesign -dv
+        # on a framework bundle path doesn't reliably surface Authority lines,
+        # but the inner executable always shows TeamIdentifier when properly signed.
+        #
+        # TeamIdentifier is extracted from DEVELOPER_ID: "... (TEAMID)" → TEAMID
+        local EXPECTED_TEAM
+        EXPECTED_TEAM="$(echo "$DEVELOPER_ID" | grep -oE '\([A-Z0-9]+\)$' | tr -d '()')"
+        if [[ -n "$EXPECTED_TEAM" ]]; then
+            log "Verifying Sparkle dylib TeamIdentifier=$EXPECTED_TEAM..."
+            codesign -dv --verbose=4 "$SPARKLE_VB/Sparkle" 2>&1 \
+                | grep -q "TeamIdentifier=$EXPECTED_TEAM" \
+                || fail "Sparkle dylib TeamIdentifier mismatch — check DEVELOPER_ID env var and that the cert is in your keychain"
+        fi
     fi
 
     # 6. ClipsterApp binary — sign explicitly before the bundle seal.
@@ -263,9 +272,16 @@ cmd_notarise() {
     codesign --verify --deep --strict "$APP_BUNDLE" \
         || fail "Bundle is not properly signed — run 'sign' first, then notarise"
 
-    # Also verify the main binary is signed with Developer ID (not ad-hoc or missing).
-    codesign -dv "$MACOS_DIR/$BINARY_NAME" 2>&1 | grep -q "Developer ID Application" \
-        || fail "$BINARY_NAME is not signed with a Developer ID certificate — run 'sign' first"
+    # Also verify the main binary is not ad-hoc signed (linker-signed ad-hoc is the
+    # default for Swift builds; any proper Developer ID signature replaces it).
+    local SIG_FLAGS
+    SIG_FLAGS="$(codesign -dv "$MACOS_DIR/$BINARY_NAME" 2>&1)"
+    if echo "$SIG_FLAGS" | grep -q "Signature=adhoc"; then
+        fail "$BINARY_NAME is ad-hoc signed (unsigned for distribution) — run 'sign' first"
+    fi
+    if ! echo "$SIG_FLAGS" | grep -qE "^TeamIdentifier="; then
+        fail "$BINARY_NAME has no TeamIdentifier — it may not be signed with a Developer ID cert — run 'sign' first"
+    fi
 
     local ZIP="$DIST_DIR/$APP_NAME-notarisation.zip"
     local NOTARY_TIMEOUT_MINUTES="${NOTARY_TIMEOUT_MINUTES:-45}"
