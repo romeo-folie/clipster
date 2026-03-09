@@ -18,6 +18,7 @@ jobs:
   swift-tests:
     name: Swift tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -55,6 +56,7 @@ jobs:
   go-tests:
     name: Go tests (macos-14)
     runs-on: macos-14
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -83,6 +85,7 @@ jobs:
   build-universal:
     name: Build universal binary
     runs-on: macos-14
+    timeout-minutes: 30
     needs: [swift-tests, go-tests]
 
     steps:
