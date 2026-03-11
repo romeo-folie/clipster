@@ -1,3 +1,4 @@
+import AppKit
 import ClipsterCore
 import SwiftUI
 
@@ -13,8 +14,10 @@ final class ClipboardViewModel: ObservableObject {
 
     private var db: ClipsterDatabase?
     private var refreshTimer: Timer?
+    private let thumbnailCache = NSCache<NSString, NSImage>()
 
     init() {
+        thumbnailCache.countLimit = 300
         openDatabase()
         refresh()
         startAutoRefresh()
@@ -72,6 +75,20 @@ final class ClipboardViewModel: ObservableObject {
     /// Fetch thumbnail JPEG data for an image entry, or nil if unavailable.
     func thumbnailData(for id: String) -> Data? {
         try? db?.thumbnail(for: id)
+    }
+
+    /// Fetch a decoded thumbnail image from in-memory cache, decoding once on miss.
+    func thumbnailImage(for id: String) -> NSImage? {
+        let key = id as NSString
+        if let cached = thumbnailCache.object(forKey: key) {
+            return cached
+        }
+        guard let data = thumbnailData(for: id),
+              let image = ImageThumbnailer.makeThumbnail(from: data) else {
+            return nil
+        }
+        thumbnailCache.setObject(image, forKey: key)
+        return image
     }
 
     func deleteEntry(id: String) {
