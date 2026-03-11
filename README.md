@@ -57,13 +57,20 @@ graph LR
 git clone https://github.com/romeo-folie/clipster
 cd clipster
 
-# CLI + daemon only
-make install
+# CLI + daemon only (no sudo; installs clipsterd to ~/.local/bin)
+make install-user
 make install-launchagent
 
 # GUI app bundle (unsigned — for development)
 make build-app
 open dist/Clipster.app
+```
+
+Optional system-wide install (may require sudo):
+
+```sh
+sudo make install
+make install-launchagent
 ```
 
 This flow is suitable for developers running Clipster locally on their own machines.

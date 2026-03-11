@@ -5,11 +5,13 @@
 
 .DEFAULT_GOAL := help
 
-BINARY_NAME   := clipsterd
-BUILD_DIR     := clipsterd/.build/release
-BINARY        := $(BUILD_DIR)/$(BINARY_NAME)
-INSTALL_PATH  := /usr/local/bin/$(BINARY_NAME)
-PLIST_SRC     := support/com.clipster.daemon.plist
+BINARY_NAME       := clipsterd
+BUILD_DIR         := clipsterd/.build/release
+BINARY            := $(BUILD_DIR)/$(BINARY_NAME)
+INSTALL_PATH      := /usr/local/bin/$(BINARY_NAME)
+USER_BIN_DIR      ?= $(HOME)/.local/bin
+USER_INSTALL_PATH := $(USER_BIN_DIR)/$(BINARY_NAME)
+PLIST_SRC         := support/com.clipster.daemon.plist
 PLIST_DEST    := $(HOME)/Library/LaunchAgents/com.clipster.daemon.plist
 LAUNCHD_SVC   := gui/$(shell id -u)/com.clipster.daemon
 
@@ -69,10 +71,24 @@ test-verbose: ## Run Swift tests with verbose output
 # ─── Install ──────────────────────────────────────────────────────────────────
 
 .PHONY: install
-install: build ## Install clipsterd to /usr/local/bin
+install: build ## Install clipsterd to /usr/local/bin (may require sudo)
 	@echo "→ Installing $(BINARY_NAME) to $(INSTALL_PATH)..."
 	install -m 755 $(BINARY) $(INSTALL_PATH)
 	@echo "✓ Installed: $(INSTALL_PATH)"
+
+.PHONY: install-user
+install-user: build ## Install clipsterd to user path (no sudo): ~/.local/bin by default
+	@echo "→ Installing $(BINARY_NAME) to user path: $(USER_INSTALL_PATH)..."
+	@mkdir -p "$(USER_BIN_DIR)"
+	@test -w "$(USER_BIN_DIR)" || (echo "✗ $(USER_BIN_DIR) is not writable by current user" && exit 1)
+	install -m 755 $(BINARY) "$(USER_INSTALL_PATH)"
+	@echo "✓ Installed: $(USER_INSTALL_PATH)"
+	@echo "  Ensure $(USER_BIN_DIR) is in your PATH"
+
+.PHONY: uninstall-user
+uninstall-user: ## Remove user-local binary (~/.local/bin/clipsterd by default)
+	rm -f "$(USER_INSTALL_PATH)"
+	@echo "✓ Removed: $(USER_INSTALL_PATH)"
 
 .PHONY: install-launchagent
 install-launchagent: ## Write plist and load LaunchAgent via launchctl
