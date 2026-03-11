@@ -53,29 +53,29 @@ jobs:
           # macos-15 occasionally leaves swift test hanging after output completion.
           # Run with an explicit timeout guard so the workflow can progress/fail deterministically.
           python3 - <<'PYEOF'
-import os, signal, subprocess, sys, threading
+          import subprocess, sys, threading
 
-TIMEOUT_SEC = 5 * 60
-proc = subprocess.Popen(["swift", "test"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+          TIMEOUT_SEC = 5 * 60
+          proc = subprocess.Popen(["swift", "test"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
 
-def watchdog():
-    try:
-        proc.wait(timeout=TIMEOUT_SEC)
-    except subprocess.TimeoutExpired:
-        print(f"\n✗ swift test exceeded {TIMEOUT_SEC}s timeout; terminating...", flush=True)
-        proc.terminate()
-        try:
-            proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-        sys.exit(124)
+          def watchdog():
+              try:
+                  proc.wait(timeout=TIMEOUT_SEC)
+              except subprocess.TimeoutExpired:
+                  print(f"\n✗ swift test exceeded {TIMEOUT_SEC}s timeout; terminating...", flush=True)
+                  proc.terminate()
+                  try:
+                      proc.wait(timeout=10)
+                  except subprocess.TimeoutExpired:
+                      proc.kill()
+                  sys.exit(124)
 
-threading.Thread(target=watchdog, daemon=True).start()
-for line in proc.stdout:
-    print(line, end="")
-code = proc.wait()
-sys.exit(code)
-PYEOF
+          threading.Thread(target=watchdog, daemon=True).start()
+          for line in proc.stdout:
+              print(line, end="")
+          code = proc.wait()
+          sys.exit(code)
+          PYEOF
 
   # ─── Go tests — runs on arm64 (macos-14) ─────────────────────────────────────
   go-tests:
