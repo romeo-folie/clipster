@@ -55,7 +55,7 @@ jobs:
           python3 - <<'PYEOF'
 import os, signal, subprocess, sys, threading
 
-TIMEOUT_SEC = 20 * 60
+TIMEOUT_SEC = 5 * 60
 proc = subprocess.Popen(["swift", "test"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
 
 def watchdog():
