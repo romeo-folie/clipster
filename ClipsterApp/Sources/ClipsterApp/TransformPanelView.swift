@@ -51,7 +51,14 @@ struct TransformPanelView: View {
         }
         .background(Theme.panelBackground(for: colorScheme))
         .onAppear {
-            previewText = entry.content
+            applyInitialSelectionPreview()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .transformNavigate)) { note in
+            guard let delta = note.userInfo?["delta"] as? Int else { return }
+            moveSelection(by: delta)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .transformApplySelected)) { _ in
+            applySelectedTransform()
         }
     }
 
@@ -134,6 +141,26 @@ struct TransformPanelView: View {
                 Color.clear
             }
         }
+    }
+
+    private func applyInitialSelectionPreview() {
+        guard !transforms.isEmpty else {
+            previewText = entry.content
+            return
+        }
+        selectedIndex = 0
+        fetchPreview(transformName: transforms[0].name)
+    }
+
+    private func moveSelection(by delta: Int) {
+        guard !transforms.isEmpty else { return }
+        selectedIndex = max(0, min(transforms.count - 1, selectedIndex + delta))
+        fetchPreview(transformName: transforms[selectedIndex].name)
+    }
+
+    private func applySelectedTransform() {
+        guard transforms.indices.contains(selectedIndex) else { return }
+        applyTransform(transformName: transforms[selectedIndex].name)
     }
 
     // MARK: - IPC Transform Calls

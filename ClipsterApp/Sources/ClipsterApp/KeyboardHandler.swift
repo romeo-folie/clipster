@@ -1,6 +1,11 @@
 import AppKit
 import SwiftUI
 
+extension Notification.Name {
+    static let transformNavigate = Notification.Name("clipster.transform.navigate")
+    static let transformApplySelected = Notification.Name("clipster.transform.applySelected")
+}
+
 /// Handles keyboard events for the clipboard panel via NSEvent local monitor.
 /// Provides arrow key navigation, Enter (paste), ⌘Enter (copy), ⌘P (pin), Escape (close).
 /// Uses NSEvent.addLocalMonitorForEvents for macOS 13+ compatibility.
@@ -42,6 +47,25 @@ final class KeyboardMonitor: ObservableObject {
         onPaste: @escaping (ClipboardEntry) -> Void
     ) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+        if viewModel.showTransformPanel {
+            switch event.keyCode {
+            case 126: // Up arrow
+                NotificationCenter.default.post(name: .transformNavigate, object: nil, userInfo: ["delta": -1])
+                return true
+            case 125: // Down arrow
+                NotificationCenter.default.post(name: .transformNavigate, object: nil, userInfo: ["delta": 1])
+                return true
+            case 36: // Return/Enter
+                NotificationCenter.default.post(name: .transformApplySelected, object: nil)
+                return true
+            case 48, 53: // Tab / Escape closes transform panel first
+                viewModel.showTransformPanel = false
+                return true
+            default:
+                return false
+            }
+        }
 
         switch event.keyCode {
         case 126: // Up arrow
