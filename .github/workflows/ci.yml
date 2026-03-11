@@ -81,7 +81,7 @@ PYEOF
   go-tests:
     name: Go tests (macos-14)
     runs-on: macos-14
-    timeout-minutes: 15
+    timeout-minutes: 5
 
     steps:
       - name: Checkout
@@ -110,7 +110,7 @@ PYEOF
   build-universal:
     name: Build universal binary
     runs-on: macos-14
-    timeout-minutes: 30
+    timeout-minutes: 5
     needs: [swift-tests, go-tests]
 
     steps:
