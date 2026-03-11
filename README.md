@@ -50,23 +50,6 @@ graph LR
 
 ## Install
 
-### Homebrew (recommended)
-
-```sh
-brew tap romeo-folie/clipster
-brew install --cask clipster
-```
-
-This installs `Clipster.app` (menu bar GUI + embedded daemon). The `clipster` CLI is available separately:
-
-```sh
-brew install romeo-folie/clipster/clipster
-```
-
-### DMG
-
-Download the latest `.dmg` from [GitHub Releases](https://github.com/romeo-folie/clipster/releases), open it, and drag `Clipster.app` to `/Applications`.
-
 ### From source
 
 ```sh
@@ -83,6 +66,7 @@ make build-app
 open dist/Clipster.app
 ```
 
+This flow is suitable for developers running Clipster locally on their own machines.
 ---
 
 ## Quick Start
