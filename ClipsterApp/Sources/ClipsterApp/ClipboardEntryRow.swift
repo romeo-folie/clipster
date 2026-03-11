@@ -10,7 +10,7 @@ struct ClipboardEntryRow: View {
     // system appearance — passing it as a parameter can leave it stale when
     // NSApp.appearance is changed while the panel is open.
     @Environment(\.colorScheme) private var colorScheme
-    var thumbnailDataProvider: ((String) -> Data?)?
+    var thumbnailProvider: ((String) -> NSImage?)?
     var onCopy: (() -> Void)?
     var onPaste: (() -> Void)?
     var onPin: (() -> Void)?
@@ -133,11 +133,10 @@ struct ClipboardEntryRow: View {
 
     private func loadThumbnailIfNeeded() {
         guard entry.contentType == .image, thumbnailImage == nil,
-              let thumbnailDataProvider else { return }
+              let thumbnailProvider else { return }
 
         DispatchQueue.global(qos: .userInitiated).async {
-            guard let data = thumbnailDataProvider(entry.id),
-                  let thumb = ImageThumbnailer.makeThumbnail(from: data) else { return }
+            guard let thumb = thumbnailProvider(entry.id) else { return }
             DispatchQueue.main.async {
                 self.thumbnailImage = thumb
             }
