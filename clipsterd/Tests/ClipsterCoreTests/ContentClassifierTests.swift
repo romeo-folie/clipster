@@ -181,8 +181,8 @@ final class ContentClassifierTests: XCTestCase {
     // Chrome copying selected text), the plain text must win — the HTML is an
     // incidental render artefact.
     //
-    // When only public.html is present (intentional HTML source copy), the HTML
-    // must be kept as-is.
+    // When only public.html is present, tags are stripped and visible text is
+    // stored as plain text — never raw markup.
 
     func testHtmlAndPlainTextPresentUsesPlainText() {
         // Simulate Slack: writes both HTML wrapper and clean plain text.
@@ -201,8 +201,9 @@ final class ContentClassifierTests: XCTestCase {
         XCTAssertNotEqual(entry?.contentType, .richText, "Should not be classified as rich text")
     }
 
-    func testHtmlOnlyPreservedAsRichText() {
-        // Simulate intentional HTML source copy: only public.html on pasteboard.
+    func testHtmlOnlyStrippedToPlainText() {
+        // HTML-only pasteboard: tags must be stripped; visible text stored as plain text.
+        // No more raw HTML / meta tags leaking into the GUI.
         let html = "<h1>Hello</h1><p>World</p>"
 
         let pb = NSPasteboard.general
@@ -213,7 +214,48 @@ final class ContentClassifierTests: XCTestCase {
         let entry = ContentClassifier.classify(pasteboard: pb, sourceApp: .unknown)
 
         XCTAssertNotNil(entry)
-        XCTAssertEqual(entry?.content, html, "Should preserve HTML when no plain-text counterpart exists")
-        XCTAssertEqual(entry?.contentType, .richText)
+        XCTAssertFalse(entry?.content.contains("<") ?? true, "Raw HTML tags must not appear in stored content")
+        XCTAssertTrue(entry?.content.contains("Hello") ?? false)
+        XCTAssertTrue(entry?.content.contains("World") ?? false)
+        XCTAssertNotEqual(entry?.contentType, .richText, "HTML-stripped content should not be richText")
+    }
+
+    func testHtmlWithMetaTagsStripped() {
+        // Common pattern: Slack/Chrome-style HTML with meta charset and wrapper divs,
+        // but WITHOUT a plain-text companion. Must strip to clean text.
+        let html = "<meta charset='utf-8'><div>Some important text here</div>"
+
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setData(html.data(using: .utf8)!, forType: .html)
+
+        let entry = ContentClassifier.classify(pasteboard: pb, sourceApp: .unknown)
+
+        XCTAssertNotNil(entry)
+        XCTAssertFalse(entry?.content.contains("<meta") ?? true, "Meta tags must be stripped")
+        XCTAssertTrue(entry?.content.contains("Some important text here") ?? false)
+    }
+
+    func testHtmlEntityDecodingViaClassify() {
+        let html = "<p>Fish &amp; Chips &lt;3 &quot;great&quot;</p>"
+
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setData(html.data(using: .utf8)!, forType: .html)
+
+        let entry = ContentClassifier.classify(pasteboard: pb, sourceApp: .unknown)
+        XCTAssertNotNil(entry)
+        XCTAssertEqual(entry?.content, "Fish & Chips <3 \"great\"")
+    }
+
+    func testHtmlOnlyNoVisibleTextSkipped() {
+        let html = "<div class='container'><span></span></div>"
+
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setData(html.data(using: .utf8)!, forType: .html)
+
+        let entry = ContentClassifier.classify(pasteboard: pb, sourceApp: .unknown)
+        XCTAssertNil(entry, "HTML with no visible text should be skipped")
     }
 }

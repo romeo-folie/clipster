@@ -44,11 +44,37 @@ public enum ContentClassifier {
             )
         }
 
-        // 3. Rich text (RTF or HTML)
+        // 3. Rich text (RTF only — HTML is handled below)
         if let rtf = richText(from: pasteboard) {
             return ClipboardEntry(
                 content: rtf,
                 contentType: .richText,
+                sourceBundle: sourceApp.bundleID,
+                sourceName: sourceApp.name,
+                sourceConfidence: sourceApp.confidence
+            )
+        }
+
+        // 3b. HTML without plain-text companion → extract visible text, store as plain text.
+        //
+        // When an app copies text it usually writes both `public.html` and
+        // `public.utf8-plain-text`. Step 4 handles that — we read the plain-text form.
+        //
+        // When only `public.html` is present (some Electron apps, web clipboards, Google
+        // Docs, etc.) we previously stored raw HTML including <meta> tags. Now we strip
+        // tags and decode entities so the user always sees readable text in the GUI.
+        //
+        // If the resulting text is empty (e.g. a purely structural HTML fragment with no
+        // visible content) we skip the entry entirely.
+        if pasteboard.string(forType: .string) == nil,
+           let htmlData = pasteboard.data(forType: .html),
+           let rawHTML = String(data: htmlData, encoding: .utf8),
+           !rawHTML.isEmpty,
+           let plainFromHTML = htmlToPlainText(rawHTML) {
+            let textType = classifyText(plainFromHTML)
+            return ClipboardEntry(
+                content: plainFromHTML,
+                contentType: textType,
                 sourceBundle: sourceApp.bundleID,
                 sourceName: sourceApp.name,
                 sourceConfidence: sourceApp.confidence
@@ -234,32 +260,53 @@ public enum ContentClassifier {
         return first.absoluteString
     }
 
+    // RTF: always extract to plain text via NSAttributedString.
+    // HTML is handled separately in classify() — never stored as raw markup.
     private static func richText(from pb: NSPasteboard) -> String? {
-        // RTF — unambiguous rich-text format; always capture.
-        if let rtfData = pb.data(forType: .rtf),
-           let str = NSAttributedString(rtf: rtfData, documentAttributes: nil) {
-            return str.string.isEmpty ? nil : str.string
-        }
+        guard let rtfData = pb.data(forType: .rtf),
+              let str = NSAttributedString(rtf: rtfData, documentAttributes: nil),
+              !str.string.isEmpty else { return nil }
+        return str.string
+    }
 
-        // HTML — only capture when plain text is NOT also present on the pasteboard.
-        //
-        // When an app (Slack, Chrome, etc.) copies selected text it writes both
-        // `public.html` and `public.utf8-plain-text`. The HTML is an incidental
-        // render artefact — what the user actually copied is the plain text.
-        // Capturing the HTML in this case stores `<meta charset='utf-8'><div …`
-        // junk instead of the readable content.
-        //
-        // When only `public.html` is present (e.g. "Copy as HTML" from a code
-        // editor, or a clipboard utility that writes HTML exclusively), the user
-        // deliberately copied HTML source — keep it.
-        if let htmlData = pb.data(forType: .html),
-           let html = String(data: htmlData, encoding: .utf8), !html.isEmpty {
-            // Plain text counterpart present → skip; step 4 will read the clean string.
-            if pb.string(forType: .string) != nil { return nil }
-            return html
+    // Extract visible plain text from an HTML string.
+    //
+    // Strategy: regex-strip all tags, then decode common HTML entities and
+    // normalise whitespace. This is intentionally simple — no WebKit dependency,
+    // no threading constraints. Complex nested HTML (tables, lists) will lose
+    // structure, but the readable text content is preserved.
+    //
+    // Used when `public.html` is on the pasteboard but `public.utf8-plain-text`
+    // is not (i.e. the app wrote only HTML). Rather than storing raw markup with
+    // `<meta charset='utf-8'>` and styling tags, we extract what the user
+    // actually sees and store that as plain text.
+    static func htmlToPlainText(_ html: String) -> String? {
+        // 1. Strip all HTML tags.
+        var text = html.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+        // 2. Decode common HTML entities.
+        let entities: [(String, String)] = [
+            ("&amp;",  "&"),
+            ("&lt;",   "<"),
+            ("&gt;",   ">"),
+            ("&quot;", "\""),
+            ("&#39;",  "'"),
+            ("&apos;", "'"),
+            ("&nbsp;", " "),
+            ("&#160;", " "),
+        ]
+        for (entity, char) in entities {
+            text = text.replacingOccurrences(of: entity, with: char)
         }
-
-        return nil
+        // 3. Collapse runs of whitespace / newlines to single spaces / newlines.
+        //    First: normalize CRLF/CR to LF.
+        text = text.replacingOccurrences(of: "\r\n", with: "\n")
+                   .replacingOccurrences(of: "\r", with: "\n")
+        //    Second: collapse horizontal whitespace runs (excluding newlines).
+        text = text.replacingOccurrences(of: "[ \t]+", with: " ", options: .regularExpression)
+        //    Third: collapse blank lines.
+        text = text.replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 
