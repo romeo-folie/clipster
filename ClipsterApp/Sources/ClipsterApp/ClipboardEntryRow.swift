@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// A single clipboard entry row in the panel.
@@ -9,6 +10,7 @@ struct ClipboardEntryRow: View {
     // system appearance — passing it as a parameter can leave it stale when
     // NSApp.appearance is changed while the panel is open.
     @Environment(\.colorScheme) private var colorScheme
+    var thumbnailDataProvider: ((String) -> Data?)?
     var onCopy: (() -> Void)?
     var onPaste: (() -> Void)?
     var onPin: (() -> Void)?
@@ -17,6 +19,7 @@ struct ClipboardEntryRow: View {
     var onSuppressApp: (() -> Void)?
 
     @State private var isHovered = false
+    @State private var thumbnailImage: NSImage?
 
     var body: some View {
         HStack(spacing: 10) {
@@ -54,6 +57,9 @@ struct ClipboardEntryRow: View {
         .onHover { hovering in
             isHovered = hovering
         }
+        .onAppear {
+            loadThumbnailIfNeeded()
+        }
         .contextMenu {
             contextMenuItems
         }
@@ -85,7 +91,13 @@ struct ClipboardEntryRow: View {
 
     @ViewBuilder
     private var typeIcon: some View {
-        if entry.contentType == .richText {
+        if entry.contentType == .image, let thumbnailImage {
+            Image(nsImage: thumbnailImage)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: Theme.iconSize + 2, height: Theme.iconSize + 2)
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        } else if entry.contentType == .richText {
             // Rich text: styled A with RTF badge
             ZStack(alignment: .bottomTrailing) {
                 Text("A")
@@ -116,6 +128,19 @@ struct ClipboardEntryRow: View {
             Text(entry.contentType.icon)
                 .font(.system(size: Theme.iconSize, weight: .medium))
                 .foregroundColor(Theme.iconTint(for: colorScheme))
+        }
+    }
+
+    private func loadThumbnailIfNeeded() {
+        guard entry.contentType == .image, thumbnailImage == nil,
+              let thumbnailDataProvider else { return }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let data = thumbnailDataProvider(entry.id),
+                  let thumb = ImageThumbnailer.makeThumbnail(from: data) else { return }
+            DispatchQueue.main.async {
+                self.thumbnailImage = thumb
+            }
         }
     }
 
