@@ -88,7 +88,6 @@ sudo make install
 make install-launchagent
 ```
 
-This flow is suitable for developers running Clipster locally on their own machines.
 ---
 
 ## Quick Start
