@@ -15,13 +15,16 @@ Free and open source. All data stays local — no cloud sync, no telemetry.
 
 ## Screenshots
 
-| Light (default) | Dark (default) |
-|---|---|
-| ![Clipster light default](screenshots/light-default.png) | ![Clipster dark default](screenshots/dark-default.png) |
-
-| Light (expanded) | Dark (expanded) |
-|---|---|
-| ![Clipster light expanded](screenshots/light-expanded.png) | ![Clipster dark expanded](screenshots/dark-expanded.png) |
+<table>
+  <tr>
+    <td><img src="screenshots/light-default.png" alt="Clipster screenshot 1" /></td>
+    <td><img src="screenshots/dark-default.png" alt="Clipster screenshot 2" /></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/light-expanded.png" alt="Clipster screenshot 3" /></td>
+    <td><img src="screenshots/dark-expanded.png" alt="Clipster screenshot 4" /></td>
+  </tr>
+</table>
 
 ---
 
