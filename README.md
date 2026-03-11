@@ -13,6 +13,20 @@ Free and open source. All data stays local — no cloud sync, no telemetry.
 
 ---
 
+## Screenshots
+
+### Light mode
+
+![Clipster light default](screenshots/light-default.png)
+![Clipster light expanded](screenshots/light-expanded.png)
+
+### Dark mode
+
+![Clipster dark default](screenshots/dark-default.png)
+![Clipster dark expanded](screenshots/dark-expanded.png)
+
+---
+
 ## Architecture
 
 ```mermaid
