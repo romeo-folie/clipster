@@ -50,24 +50,20 @@ graph LR
 
 ## Install
 
-### Homebrew (recommended)
+> **Current status (temporary): source-only installs**
+>
+> Apple notarization for packaged distribution is still being finalized.
+> Until that is resolved, the supported installation path is **from source**.
 
-```sh
-brew tap romeo-folie/clipster
-brew install --cask clipster
-```
+### Homebrew (temporarily disabled)
 
-This installs `Clipster.app` (menu bar GUI + embedded daemon). The `clipster` CLI is available separately:
+Packaged Homebrew install is temporarily paused while notarization is unresolved.
 
-```sh
-brew install romeo-folie/clipster/clipster
-```
+### DMG (temporarily disabled)
 
-### DMG
+Signed/notarized DMG releases are temporarily paused while notarization is unresolved.
 
-Download the latest `.dmg` from [GitHub Releases](https://github.com/romeo-folie/clipster/releases), open it, and drag `Clipster.app` to `/Applications`.
-
-### From source
+### From source (recommended for now)
 
 ```sh
 # Requires: macOS 13+, Xcode 16+, Go 1.22+
@@ -83,6 +79,7 @@ make build-app
 open dist/Clipster.app
 ```
 
+This flow is suitable for developers running Clipster locally on their own machines.
 ---
 
 ## Quick Start
