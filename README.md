@@ -50,20 +50,7 @@ graph LR
 
 ## Install
 
-> **Current status (temporary): source-only installs**
->
-> Apple notarization for packaged distribution is still being finalized.
-> Until that is resolved, the supported installation path is **from source**.
-
-### Homebrew (temporarily disabled)
-
-Packaged Homebrew install is temporarily paused while notarization is unresolved.
-
-### DMG (temporarily disabled)
-
-Signed/notarized DMG releases are temporarily paused while notarization is unresolved.
-
-### From source (recommended for now)
+### From source
 
 ```sh
 # Requires: macOS 13+, Xcode 16+, Go 1.22+
