@@ -18,7 +18,7 @@ jobs:
   swift-tests:
     name: Swift tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
