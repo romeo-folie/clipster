@@ -17,12 +17,8 @@ Free and open source. All data stays local — no cloud sync, no telemetry.
 
 <table>
   <tr>
-    <td><img src="screenshots/light-default.png" alt="Clipster screenshot 1" /></td>
-    <td><img src="screenshots/dark-default.png" alt="Clipster screenshot 2" /></td>
-  </tr>
-  <tr>
-    <td><img src="screenshots/light-expanded.png" alt="Clipster screenshot 3" /></td>
-    <td><img src="screenshots/dark-expanded.png" alt="Clipster screenshot 4" /></td>
+    <td><img src="screenshots/light.png" alt="Clipster screenshot 1" /></td>
+    <td><img src="screenshots/dark.png" alt="Clipster screenshot 2" /></td>
   </tr>
 </table>
 
