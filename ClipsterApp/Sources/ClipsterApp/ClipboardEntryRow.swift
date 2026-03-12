@@ -10,7 +10,8 @@ struct ClipboardEntryRow: View {
     // system appearance — passing it as a parameter can leave it stale when
     // NSApp.appearance is changed while the panel is open.
     @Environment(\.colorScheme) private var colorScheme
-    var thumbnailProvider: ((String) -> NSImage?)?
+    var rowThumbnailProvider: ((String) -> NSImage?)?
+    var expandedPreviewProvider: ((String) -> NSImage?)?
     var onCopy: (() -> Void)?
     var onPaste: (() -> Void)?
     var onPin: (() -> Void)?
@@ -19,7 +20,8 @@ struct ClipboardEntryRow: View {
     var onSuppressApp: (() -> Void)?
 
     @State private var isHovered = false
-    @State private var thumbnailImage: NSImage?
+    @State private var rowThumbnailImage: NSImage?
+    @State private var expandedPreviewImage: NSImage?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -50,8 +52,8 @@ struct ClipboardEntryRow: View {
                 }
             }
 
-            if showsExpandedImagePreview, let thumbnailImage {
-                Image(nsImage: thumbnailImage)
+            if showsExpandedImagePreview, let expandedPreviewImage {
+                Image(nsImage: expandedPreviewImage)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: 220, maxHeight: 220)
@@ -69,7 +71,10 @@ struct ClipboardEntryRow: View {
             isHovered = hovering
         }
         .onAppear {
-            loadThumbnailIfNeeded()
+            loadThumbnailsIfNeeded()
+        }
+        .onChange(of: isSelected) { _ in
+            loadThumbnailsIfNeeded()
         }
         .contextMenu {
             contextMenuItems
@@ -102,8 +107,8 @@ struct ClipboardEntryRow: View {
 
     @ViewBuilder
     private var typeIcon: some View {
-        if entry.contentType == .image, let thumbnailImage {
-            Image(nsImage: thumbnailImage)
+        if entry.contentType == .image, let rowThumbnailImage {
+            Image(nsImage: rowThumbnailImage)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
                 .frame(width: Theme.iconSize + 2, height: Theme.iconSize + 2)
@@ -142,14 +147,24 @@ struct ClipboardEntryRow: View {
         }
     }
 
-    private func loadThumbnailIfNeeded() {
-        guard entry.contentType == .image, thumbnailImage == nil,
-              let thumbnailProvider else { return }
+    private func loadThumbnailsIfNeeded() {
+        guard entry.contentType == .image else { return }
 
-        DispatchQueue.global(qos: .userInitiated).async {
-            guard let thumb = thumbnailProvider(entry.id) else { return }
-            DispatchQueue.main.async {
-                self.thumbnailImage = thumb
+        if rowThumbnailImage == nil, let rowThumbnailProvider {
+            DispatchQueue.global(qos: .userInitiated).async {
+                guard let thumb = rowThumbnailProvider(entry.id) else { return }
+                DispatchQueue.main.async {
+                    self.rowThumbnailImage = thumb
+                }
+            }
+        }
+
+        if isSelected, expandedPreviewImage == nil, let expandedPreviewProvider {
+            DispatchQueue.global(qos: .userInitiated).async {
+                guard let preview = expandedPreviewProvider(entry.id) else { return }
+                DispatchQueue.main.async {
+                    self.expandedPreviewImage = preview
+                }
             }
         }
     }

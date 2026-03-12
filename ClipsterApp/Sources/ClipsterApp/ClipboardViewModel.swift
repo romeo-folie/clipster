@@ -14,10 +14,12 @@ final class ClipboardViewModel: ObservableObject {
 
     private var db: ClipsterDatabase?
     private var refreshTimer: Timer?
-    private let thumbnailCache = NSCache<NSString, NSImage>()
+    private let rowThumbnailCache = NSCache<NSString, NSImage>()
+    private let expandedPreviewCache = NSCache<NSString, NSImage>()
 
     init() {
-        thumbnailCache.countLimit = 300
+        rowThumbnailCache.countLimit = 400
+        expandedPreviewCache.countLimit = 200
         openDatabase()
         refresh()
         startAutoRefresh()
@@ -77,17 +79,31 @@ final class ClipboardViewModel: ObservableObject {
         try? db?.thumbnail(for: id)
     }
 
-    /// Fetch a decoded thumbnail image from in-memory cache, decoding once on miss.
-    func thumbnailImage(for id: String) -> NSImage? {
+    /// Fetch small image used in list-row icon slot (fast path).
+    func rowThumbnailImage(for id: String) -> NSImage? {
         let key = id as NSString
-        if let cached = thumbnailCache.object(forKey: key) {
+        if let cached = rowThumbnailCache.object(forKey: key) {
             return cached
         }
         guard let data = thumbnailData(for: id),
-              let image = ImageThumbnailer.makeThumbnail(from: data) else {
+              let image = ImageThumbnailer.makeThumbnail(from: data, maxSide: 56) else {
             return nil
         }
-        thumbnailCache.setObject(image, forKey: key)
+        rowThumbnailCache.setObject(image, forKey: key)
+        return image
+    }
+
+    /// Fetch larger image for expanded preview pane (avoid upscaling tiny row thumb).
+    func expandedPreviewImage(for id: String) -> NSImage? {
+        let key = id as NSString
+        if let cached = expandedPreviewCache.object(forKey: key) {
+            return cached
+        }
+        guard let data = thumbnailData(for: id),
+              let image = ImageThumbnailer.makeThumbnail(from: data, maxSide: 220) else {
+            return nil
+        }
+        expandedPreviewCache.setObject(image, forKey: key)
         return image
     }
 
