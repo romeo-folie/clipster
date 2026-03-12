@@ -48,7 +48,9 @@ final class KeyboardMonitor: ObservableObject {
     ) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
-        if viewModel.showTransformPanel, selectedEntry(viewModel: viewModel) != nil {
+        if viewModel.showTransformPanel,
+           let selected = selectedEntry(viewModel: viewModel),
+           selected.contentType != .image {
             switch event.keyCode {
             case 126: // Up arrow
                 NotificationCenter.default.post(name: .transformNavigate, object: nil, userInfo: ["delta": -1])
@@ -85,6 +87,10 @@ final class KeyboardMonitor: ObservableObject {
             }
             return true
         case 48:  // Tab
+            // Image entries are not transformable; Tab should be a no-op.
+            if let entry = selectedEntry(viewModel: viewModel), entry.contentType == .image {
+                return true
+            }
             DispatchQueue.main.async {
                 if viewModel.showTransformPanel {
                     viewModel.showTransformPanel = false

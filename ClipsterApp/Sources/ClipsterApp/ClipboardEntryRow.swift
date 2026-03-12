@@ -53,11 +53,15 @@ struct ClipboardEntryRow: View {
             }
 
             if showsExpandedImagePreview, let expandedPreviewImage {
-                Image(nsImage: expandedPreviewImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: 220, maxHeight: 220)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                HStack {
+                    Spacer(minLength: 0)
+                    Image(nsImage: expandedPreviewImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: 220, maxHeight: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    Spacer(minLength: 0)
+                }
             }
         }
         .padding(.horizontal, Theme.panelPadding + 4)
@@ -92,6 +96,7 @@ struct ClipboardEntryRow: View {
 
         Button(entry.isPinned ? "Unpin  ⌘P" : "Pin  ⌘P") { onPin?() }
         Button("Transform…  Tab") { onTransform?() }
+            .disabled(entry.contentType == .image)
 
         Divider()
 

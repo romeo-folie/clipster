@@ -57,13 +57,20 @@ struct ClipboardPanelView: View {
                     withAnimation(.easeInOut(duration: 0.15)) {
                         proxy.scrollTo(rowID, anchor: nil)
                     }
+
+                    let all = viewModel.filteredPinned + viewModel.filteredHistory
+                    if let selected = all.first(where: { $0.id == id }),
+                       selected.contentType == .image,
+                       viewModel.showTransformPanel {
+                        viewModel.showTransformPanel = false
+                    }
                 }
             }
         }
         .frame(width: Theme.panelWidth, height: Theme.panelHeight)
         .background(Theme.panelBackground(for: colorScheme))
         .overlay(alignment: .bottom) {
-            if viewModel.showTransformPanel, let entry = selectedEntry {
+            if viewModel.showTransformPanel, let entry = selectedEntry, entry.contentType != .image {
                 TransformPanelView(
                     entry: entry,
                     onApply: { transformedText in
@@ -106,6 +113,7 @@ struct ClipboardPanelView: View {
             onPaste: { onPaste?(entry) },
             onPin: { viewModel.togglePin(id: entry.id) },
             onTransform: {
+                guard entry.contentType != .image else { return }
                 viewModel.selectedID = entry.id
                 viewModel.showTransformPanel = true
             },
