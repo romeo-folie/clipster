@@ -85,6 +85,10 @@ final class KeyboardMonitor: ObservableObject {
             }
             return true
         case 48:  // Tab
+            // Image entries are not transformable; Tab should be a no-op.
+            if let entry = selectedEntry(viewModel: viewModel), entry.contentType == .image {
+                return true
+            }
             DispatchQueue.main.async {
                 if viewModel.showTransformPanel {
                     viewModel.showTransformPanel = false
