@@ -22,34 +22,45 @@ struct ClipboardEntryRow: View {
     @State private var thumbnailImage: NSImage?
 
     var body: some View {
-        HStack(spacing: 10) {
-            // Type icon
-            typeIcon
-                .frame(width: 20, height: 20)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                // Type icon
+                typeIcon
+                    .frame(width: 20, height: 20)
 
-            // Content preview
-            Text(entry.preview)
-                .font(entry.contentType == .code ? .system(size: 13, design: .monospaced) : Theme.primaryFont)
-                .foregroundColor(Theme.primaryText(for: colorScheme))
-                .lineLimit(1)
-                .truncationMode(.tail)
-
-            Spacer(minLength: 4)
-
-            // Source app + timestamp
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(entry.sourceApp)
-                    .font(Theme.secondaryFont)
-                    .foregroundColor(Theme.secondaryText(for: colorScheme))
+                // Content preview
+                Text(entry.preview)
+                    .font(entry.contentType == .code ? .system(size: 13, design: .monospaced) : Theme.primaryFont)
+                    .foregroundColor(Theme.primaryText(for: colorScheme))
                     .lineLimit(1)
+                    .truncationMode(.tail)
 
-                Text(relativeTimestamp)
-                    .font(.system(size: 10))
-                    .foregroundColor(Theme.secondaryText(for: colorScheme).opacity(0.7))
+                Spacer(minLength: 4)
+
+                // Source app + timestamp
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(entry.sourceApp)
+                        .font(Theme.secondaryFont)
+                        .foregroundColor(Theme.secondaryText(for: colorScheme))
+                        .lineLimit(1)
+
+                    Text(relativeTimestamp)
+                        .font(.system(size: 10))
+                        .foregroundColor(Theme.secondaryText(for: colorScheme).opacity(0.7))
+                }
+            }
+
+            if showsExpandedImagePreview, let thumbnailImage {
+                Image(nsImage: thumbnailImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: 220, maxHeight: 220)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
         }
         .padding(.horizontal, Theme.panelPadding + 4)
-        .frame(height: Theme.rowHeight)
+        .padding(.vertical, 6)
+        .frame(minHeight: Theme.rowHeight, alignment: .leading)
         .background(rowBackground)
         .cornerRadius(Theme.rowCornerRadius)
         .padding(.horizontal, colorScheme == .light ? Theme.panelPadding : 4)
@@ -162,6 +173,10 @@ struct ClipboardEntryRow: View {
             let b = Double(rgb & 0xF) / 15
             return Color(red: r, green: g, blue: b)
         }
+    }
+
+    private var showsExpandedImagePreview: Bool {
+        isSelected && entry.contentType == .image
     }
 
     // MARK: - Row Background
