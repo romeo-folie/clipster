@@ -48,7 +48,7 @@ final class KeyboardMonitor: ObservableObject {
     ) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
-        if viewModel.showTransformPanel {
+        if viewModel.showTransformPanel, selectedEntry(viewModel: viewModel) != nil {
             switch event.keyCode {
             case 126: // Up arrow
                 NotificationCenter.default.post(name: .transformNavigate, object: nil, userInfo: ["delta": -1])
