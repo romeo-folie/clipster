@@ -57,6 +57,13 @@ struct ClipboardPanelView: View {
                     withAnimation(.easeInOut(duration: 0.15)) {
                         proxy.scrollTo(rowID, anchor: nil)
                     }
+
+                    let all = viewModel.filteredPinned + viewModel.filteredHistory
+                    if let selected = all.first(where: { $0.id == id }),
+                       selected.contentType == .image,
+                       viewModel.showTransformPanel {
+                        viewModel.showTransformPanel = false
+                    }
                 }
             }
         }
