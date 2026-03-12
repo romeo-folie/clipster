@@ -96,7 +96,8 @@ struct ClipboardPanelView: View {
         ClipboardEntryRow(
             entry: entry,
             isSelected: viewModel.selectedID == entry.id,
-            thumbnailProvider: { id in viewModel.thumbnailImage(for: id) },
+            rowThumbnailProvider: { id in viewModel.rowThumbnailImage(for: id) },
+            expandedPreviewProvider: { id in viewModel.expandedPreviewImage(for: id) },
             onCopy: {
                 let pb = NSPasteboard.general
                 pb.clearContents()
