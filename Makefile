@@ -11,6 +11,12 @@ BINARY            := $(BUILD_DIR)/$(BINARY_NAME)
 INSTALL_PATH      := /usr/local/bin/$(BINARY_NAME)
 USER_BIN_DIR      ?= $(HOME)/.local/bin
 USER_INSTALL_PATH := $(USER_BIN_DIR)/$(BINARY_NAME)
+
+CLI_BINARY_NAME   := clipster
+CLI_SRC_DIR       := clipster-client
+CLI_BUILD_OUT     := $(CLI_SRC_DIR)/$(CLI_BINARY_NAME)
+CLI_INSTALL_PATH  := /usr/local/bin/$(CLI_BINARY_NAME)
+CLI_USER_INSTALL  := $(USER_BIN_DIR)/$(CLI_BINARY_NAME)
 PLIST_SRC         := support/com.clipster.daemon.plist
 PLIST_DEST    := $(HOME)/Library/LaunchAgents/com.clipster.daemon.plist
 LAUNCHD_SVC   := gui/$(shell id -u)/com.clipster.daemon
@@ -89,6 +95,27 @@ install-user: build ## Install clipsterd to user path (no sudo): ~/.local/bin by
 uninstall-user: ## Remove user-local binary (~/.local/bin/clipsterd by default)
 	rm -f "$(USER_INSTALL_PATH)"
 	@echo "✓ Removed: $(USER_INSTALL_PATH)"
+
+.PHONY: build-cli
+build-cli: ## Build the clipster Go CLI binary
+	@echo "→ Building clipster CLI..."
+	cd $(CLI_SRC_DIR) && go build -o $(CLI_BINARY_NAME) ./cmd/$(CLI_BINARY_NAME)
+	@echo "✓ Built: $(CLI_BUILD_OUT)"
+
+.PHONY: install-cli
+install-cli: build-cli ## Install clipster CLI to /usr/local/bin (may require sudo)
+	@echo "→ Installing $(CLI_BINARY_NAME) to $(CLI_INSTALL_PATH)..."
+	install -m 755 $(CLI_BUILD_OUT) $(CLI_INSTALL_PATH)
+	@echo "✓ Installed: $(CLI_INSTALL_PATH)"
+
+.PHONY: install-cli-user
+install-cli-user: build-cli ## Install clipster CLI to ~/.local/bin (no sudo)
+	@echo "→ Installing $(CLI_BINARY_NAME) to user path: $(CLI_USER_INSTALL)..."
+	@mkdir -p "$(USER_BIN_DIR)"
+	@test -w "$(USER_BIN_DIR)" || (echo "✗ $(USER_BIN_DIR) is not writable by current user" && exit 1)
+	install -m 755 $(CLI_BUILD_OUT) "$(CLI_USER_INSTALL)"
+	@echo "✓ Installed: $(CLI_USER_INSTALL)"
+	@echo "  Ensure $(USER_BIN_DIR) is in your PATH"
 
 .PHONY: install-launchagent
 install-launchagent: ## Write plist and load LaunchAgent via launchctl
@@ -202,10 +229,17 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  %-25s %s\n", $$1, $$2}'
 	@echo ""
-	@echo "Phase 0 workflow:"
-	@echo "  1. make build"
-	@echo "  2. make test"
-	@echo "  3. make install"
-	@echo "  4. make install-launchagent"
-	@echo "  5. make verify-phase0"
-	@echo "  6. make notarise  (requires DEVELOPER_ID, APPLE_ID, TEAM_ID, APP_PASSWORD)"
+	@echo "Install workflow (system-wide, requires sudo):"
+	@echo "  1. sudo make install"
+	@echo "  2. sudo make install-cli"
+	@echo "  3. make install-launchagent"
+	@echo ""
+	@echo "Install workflow (user-local, no sudo):"
+	@echo "  1. make install-user"
+	@echo "  2. make install-cli-user"
+	@echo "  3. make install-launchagent"
+	@echo "  (ensure ~/.local/bin is in your PATH)"
+	@echo ""
+	@echo "Phase 0 gate:"
+	@echo "  make verify-phase0"
+	@echo "  make notarise  (requires DEVELOPER_ID, APPLE_ID, TEAM_ID, APP_PASSWORD)"
