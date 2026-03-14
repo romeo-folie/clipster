@@ -122,7 +122,15 @@ public final class ClipsterDatabase {
     ///
     /// - Throws: `DatabaseError` on SQLite failure.
     public func insert(_ entry: ClipboardEntry) throws {
-        let hash = sha256(entry.content)
+        // For image entries the text content is always "[image]" or a filename — not
+        // unique. Hash the raw pixel data instead so distinct images deduplicate
+        // correctly and consecutive copies of the same image are still dropped.
+        let hash: String
+        if entry.contentType == .image, let imgData = entry.imageData {
+            hash = sha256(imgData)
+        } else {
+            hash = sha256(entry.content)
+        }
         let preview = String(entry.content.prefix(200))
         let createdAt = Int64(entry.capturedAt.timeIntervalSince1970 * 1000)
 
@@ -445,7 +453,10 @@ public final class ClipsterDatabase {
     }
 
     private func sha256(_ string: String) -> String {
-        let data = Data(string.utf8)
+        sha256(Data(string.utf8))
+    }
+
+    private func sha256(_ data: Data) -> String {
         let digest = SHA256.hash(data: data)
         return digest.map { String(format: "%02x", $0) }.joined()
     }

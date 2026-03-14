@@ -23,8 +23,13 @@ public enum ContentClassifier {
 
         // 1. Image
         if let imgData = imageData(from: pasteboard) {
+            // Try to extract a human-readable filename from the pasteboard.
+            // Covers: files dragged in, "copy image" from Finder, screenshotted files.
+            // Falls back to "[image]" when no file reference is available (e.g. browser
+            // screenshot, copy-from-app image).
+            let imageName = imageFilename(from: pasteboard) ?? "[image]"
             return ClipboardEntry(
-                content: "[image]",      // placeholder text; thumbnail stored in DB
+                content: imageName,
                 contentType: .image,
                 sourceBundle: sourceApp.bundleID,
                 sourceName: sourceApp.name,
@@ -250,6 +255,23 @@ public enum ContentClassifier {
         if let png  = pb.data(forType: NSPasteboard.PasteboardType("public.png")), !png.isEmpty { return png }
         for uti in NSImage.imageTypes {
             if let data = pb.data(forType: NSPasteboard.PasteboardType(uti)), !data.isEmpty { return data }
+        }
+        return nil
+    }
+
+    /// Extract the filename of an image from the pasteboard, if a file reference is
+    /// present (e.g. copied from Finder, dragged image file). Returns nil when the
+    /// clipboard holds raw pixel data only (screenshots, copy-from-browser).
+    private static func imageFilename(from pb: NSPasteboard) -> String? {
+        // Prefer the public.file-url type which is reliably present for file-backed images.
+        if let fileURLString = pb.string(forType: NSPasteboard.PasteboardType("public.file-url")),
+           let url = URL(string: fileURLString), url.isFileURL {
+            return url.lastPathComponent
+        }
+        // Fallback: NSURL objects on the pasteboard (e.g. NSFilenamesPboardType bridge).
+        if let urls = pb.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
+           let first = urls.first(where: { $0.isFileURL }) {
+            return first.lastPathComponent
         }
         return nil
     }
