@@ -129,13 +129,18 @@ final class ClipboardViewModel: ObservableObject {
 
     /// Pre-warm the row thumbnail cache for all image entries so rows display
     /// immediately without a visible async delay when they first appear.
+    ///
+    /// Must be called from a background thread. Runs synchronously on the calling
+    /// queue so that thumbnails are fully cached before the caller dispatches UI
+    /// updates to the main thread.
     private func prefetchThumbnails(for entries: [ClipboardEntry]) {
         let imageEntries = entries.filter { $0.contentType == .image }
         guard !imageEntries.isEmpty else { return }
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            for entry in imageEntries {
-                _ = self?.rowThumbnailImage(for: entry.id)
-            }
+        // Run synchronously — caller is already on a background queue (.userInitiated).
+        // Dispatching to yet another async queue would return immediately and give
+        // no guarantee that thumbnails are ready before the main-thread publish.
+        for entry in imageEntries {
+            _ = rowThumbnailImage(for: entry.id)
         }
     }
 
