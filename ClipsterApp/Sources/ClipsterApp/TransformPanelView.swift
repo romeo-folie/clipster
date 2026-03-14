@@ -40,11 +40,20 @@ struct TransformPanelView: View {
             Divider()
                 .background(Theme.separator(for: colorScheme))
 
-            // Transform list
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(Array(transforms.enumerated()), id: \.offset) { index, transform in
-                        transformRow(transform: transform, index: index)
+            // Transform list — ScrollViewReader keeps the selected row visible
+            // when keyboard navigation moves the cursor outside the visible area.
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(transforms.enumerated()), id: \.offset) { index, transform in
+                            transformRow(transform: transform, index: index)
+                                .id(index)
+                        }
+                    }
+                }
+                .onChange(of: selectedIndex) { newIndex in
+                    withAnimation(.easeInOut(duration: 0.12)) {
+                        proxy.scrollTo(newIndex, anchor: .center)
                     }
                 }
             }
