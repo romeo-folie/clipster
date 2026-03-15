@@ -87,6 +87,12 @@ final class KeyboardMonitor: ObservableObject {
             }
             return true
         case 51:  // Delete / Backspace — delete selected entry
+            // Don't intercept when a text field has focus (e.g. the search bar).
+            // NSTextField uses an NSText field editor as first responder while
+            // the user is typing, so we check for NSText to cover that case.
+            if let fr = NSApp.keyWindow?.firstResponder, fr is NSText {
+                return false
+            }
             deleteSelected(viewModel: viewModel)
             return true
         case 48:  // Tab
