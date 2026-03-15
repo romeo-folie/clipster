@@ -7,7 +7,7 @@ extension Notification.Name {
 }
 
 /// Handles keyboard events for the clipboard panel via NSEvent local monitor.
-/// Provides arrow key navigation, Enter (paste), ⌘Enter (copy), ⌘P (pin), Escape (close).
+/// Provides arrow key navigation, Enter (paste), ⌘Enter (copy), ⌘P (pin), Delete (delete), Escape (close).
 /// Uses NSEvent.addLocalMonitorForEvents for macOS 13+ compatibility.
 final class KeyboardMonitor: ObservableObject {
     private var monitor: Any?
@@ -85,6 +85,15 @@ final class KeyboardMonitor: ObservableObject {
             } else {
                 pasteSelected(viewModel: viewModel, onPaste: onPaste)
             }
+            return true
+        case 51:  // Delete / Backspace — delete selected entry
+            // Don't intercept when a text field has focus (e.g. the search bar).
+            // NSTextField uses an NSText field editor as first responder while
+            // the user is typing, so we check for NSText to cover that case.
+            if let fr = NSApp.keyWindow?.firstResponder, fr is NSText {
+                return false
+            }
+            deleteSelected(viewModel: viewModel)
             return true
         case 48:  // Tab
             // Image entries are not transformable; Tab should be a no-op.
@@ -164,6 +173,18 @@ final class KeyboardMonitor: ObservableObject {
     private static func pinSelected(viewModel: ClipboardViewModel) {
         guard let entry = selectedEntry(viewModel: viewModel) else { return }
         viewModel.togglePin(id: entry.id)
+    }
+
+    private static func deleteSelected(viewModel: ClipboardViewModel) {
+        guard let entry = selectedEntry(viewModel: viewModel) else { return }
+        // Advance selection to the next item before deleting so the panel
+        // doesn't snap back to the top.
+        let allEntries = viewModel.filteredPinned + viewModel.filteredHistory
+        if let idx = allEntries.firstIndex(where: { $0.id == entry.id }) {
+            let nextIdx = idx < allEntries.count - 1 ? idx + 1 : (idx > 0 ? idx - 1 : nil)
+            viewModel.selectedID = nextIdx.map { allEntries[$0].id }
+        }
+        viewModel.deleteEntry(id: entry.id)
     }
 
     private static func selectedEntry(viewModel: ClipboardViewModel) -> ClipboardEntry? {

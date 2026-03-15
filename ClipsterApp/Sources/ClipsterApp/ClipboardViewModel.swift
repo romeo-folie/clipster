@@ -34,13 +34,13 @@ final class ClipboardViewModel: ObservableObject {
     var filteredPinned: [ClipboardEntry] {
         guard !searchQuery.isEmpty else { return pinnedEntries }
         let q = searchQuery.lowercased()
-        return pinnedEntries.filter { $0.preview.lowercased().contains(q) }
+        return pinnedEntries.filter { matches($0, query: q) }
     }
 
     var filteredHistory: [ClipboardEntry] {
         guard !searchQuery.isEmpty else { return historyEntries }
         let q = searchQuery.lowercased()
-        return historyEntries.filter { $0.preview.lowercased().contains(q) }
+        return historyEntries.filter { matches($0, query: q) }
     }
 
     // MARK: - Write Actions (all writes go through IPC to clipsterd)
@@ -107,6 +107,43 @@ final class ClipboardViewModel: ObservableObject {
         return image
     }
 
+    // MARK: - Search
+
+    /// Returns true if an entry matches the search query.
+    /// Matches against preview text AND content type keyword so that typing
+    /// "image", "url", "code" etc. filters by category regardless of display text.
+    private func matches(_ entry: ClipboardEntry, query: String) -> Bool {
+        if entry.preview.lowercased().contains(query) { return true }
+        if entry.contentType.rawValue.lowercased().contains(query) { return true }
+        // Also allow friendly aliases: "link" → url, "pic"/"photo" → image.
+        switch query {
+        case "link":          return entry.contentType == .url
+        case "pic", "photo":  return entry.contentType == .image
+        case "text":          return entry.contentType == .plainText
+        case "colour", "color": return entry.contentType == .colour
+        default:              return false
+        }
+    }
+
+    // MARK: - Thumbnail prefetch
+
+    /// Pre-warm the row thumbnail cache for all image entries so rows display
+    /// immediately without a visible async delay when they first appear.
+    ///
+    /// Must be called from a background thread. Runs synchronously on the calling
+    /// queue so that thumbnails are fully cached before the caller dispatches UI
+    /// updates to the main thread.
+    private func prefetchThumbnails(for entries: [ClipboardEntry]) {
+        let imageEntries = entries.filter { $0.contentType == .image }
+        guard !imageEntries.isEmpty else { return }
+        // Run synchronously — caller is already on a background queue (.userInitiated).
+        // Dispatching to yet another async queue would return immediately and give
+        // no guarantee that thumbnails are ready before the main-thread publish.
+        for entry in imageEntries {
+            _ = rowThumbnailImage(for: entry.id)
+        }
+    }
+
     func deleteEntry(id: String) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             do {
@@ -139,11 +176,15 @@ final class ClipboardViewModel: ObservableObject {
             do {
                 let pinned = try db.listPinned()
                 let history = try db.list(limit: 200)
+                let pinnedEntries = pinned.map { ClipboardEntry(from: $0, isPinned: true) }
+                let historyEntries = history
+                    .filter { !$0.isPinned }
+                    .map { ClipboardEntry(from: $0, isPinned: false) }
+                // Pre-warm thumbnail cache before publishing so rows render instantly.
+                self?.prefetchThumbnails(for: pinnedEntries + historyEntries)
                 DispatchQueue.main.async {
-                    self?.pinnedEntries = pinned.map { ClipboardEntry(from: $0, isPinned: true) }
-                    self?.historyEntries = history
-                        .filter { !$0.isPinned }
-                        .map { ClipboardEntry(from: $0, isPinned: false) }
+                    self?.pinnedEntries = pinnedEntries
+                    self?.historyEntries = historyEntries
                     if resetSelection {
                         self?.selectedID = self?.filteredPinned.first?.id
                             ?? self?.filteredHistory.first?.id
