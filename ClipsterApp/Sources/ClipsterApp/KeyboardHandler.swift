@@ -86,10 +86,12 @@ final class KeyboardMonitor: ObservableObject {
                 pasteSelected(viewModel: viewModel, onPaste: onPaste)
             }
             return true
-        case 51:  // Delete / Backspace — delete selected entry
+        case 51,  // Backspace (⌫)
+             117: // Forward Delete (⌦, also fn+Delete on laptop keyboards)
             // Don't intercept when a text field has focus (e.g. the search bar).
             // NSTextField uses an NSText field editor as first responder while
-            // the user is typing, so we check for NSText to cover that case.
+            // the user is typing; checking for NSText covers that case for both
+            // Backspace and Forward Delete.
             if let fr = NSApp.keyWindow?.firstResponder, fr is NSText {
                 return false
             }
