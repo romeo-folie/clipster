@@ -96,10 +96,14 @@ final class KeyboardMonitor: ObservableObject {
             deleteSelected(viewModel: viewModel)
             return true
         case 117: // Forward Delete (⌦) — delete selected entry
-            // The dedicated Delete key (keyCode 117) is distinct from Backspace
-            // (keyCode 51). Most keyboards with a Delete key (Keychron, full-size
-            // Apple keyboards) generate 117. Neither text fields nor other system
-            // handlers use this key, so no focus-guard is needed.
+            // Forward Delete is also produced by fn+Delete on laptop keyboards and
+            // is a standard text-editing key in NSTextField (moves cursor forward /
+            // deletes the character to the right of the cursor). Apply the same
+            // first-responder guard as Backspace so this key passes through
+            // unhandled when a text field (e.g. the search bar) has focus.
+            if let fr = NSApp.keyWindow?.firstResponder, fr is NSText {
+                return false
+            }
             deleteSelected(viewModel: viewModel)
             return true
         case 48:  // Tab
