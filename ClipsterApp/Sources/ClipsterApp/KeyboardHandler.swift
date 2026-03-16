@@ -86,13 +86,20 @@ final class KeyboardMonitor: ObservableObject {
                 pasteSelected(viewModel: viewModel, onPaste: onPaste)
             }
             return true
-        case 51:  // Delete / Backspace — delete selected entry
+        case 51:  // Backspace (⌫) — delete selected entry
             // Don't intercept when a text field has focus (e.g. the search bar).
             // NSTextField uses an NSText field editor as first responder while
             // the user is typing, so we check for NSText to cover that case.
             if let fr = NSApp.keyWindow?.firstResponder, fr is NSText {
                 return false
             }
+            deleteSelected(viewModel: viewModel)
+            return true
+        case 117: // Forward Delete (⌦) — delete selected entry
+            // The dedicated Delete key (keyCode 117) is distinct from Backspace
+            // (keyCode 51). Most keyboards with a Delete key (Keychron, full-size
+            // Apple keyboards) generate 117. Neither text fields nor other system
+            // handlers use this key, so no focus-guard is needed.
             deleteSelected(viewModel: viewModel)
             return true
         case 48:  // Tab
