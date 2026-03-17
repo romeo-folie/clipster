@@ -88,15 +88,9 @@ final class KeyboardMonitor: ObservableObject {
             return true
         case 51,  // Backspace (⌫)
              117: // Forward Delete (⌦, also fn+Delete on laptop keyboards)
-            // Don't intercept when a text field has focus (e.g. the search bar).
-            // NSTextField uses an NSText field editor as first responder while
-            // the user is typing; checking for NSText covers that case for both
-            // Backspace and Forward Delete.
-            if let fr = NSApp.keyWindow?.firstResponder, fr is NSText {
-                return false
-            }
-            deleteSelected(viewModel: viewModel)
-            return true
+            // Pass through to the text field — bare Delete/Backspace now only
+            // clears search input. Use ⌘D to delete a list entry.
+            return false
         case 48:  // Tab
             // Image entries are not transformable; Tab should be a no-op.
             if let entry = selectedEntry(viewModel: viewModel), entry.contentType == .image {
@@ -114,6 +108,11 @@ final class KeyboardMonitor: ObservableObject {
             // ⌘P
             if flags.contains(.command), event.charactersIgnoringModifiers == "p" {
                 pinSelected(viewModel: viewModel)
+                return true
+            }
+            // ⌘D — delete selected entry regardless of search focus state
+            if flags.contains(.command), event.charactersIgnoringModifiers == "d" {
+                deleteSelected(viewModel: viewModel)
                 return true
             }
             return false
