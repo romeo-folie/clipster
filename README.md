@@ -147,6 +147,7 @@ clipster clear --force   # no prompt
 | `⌘Enter` | Copy selected entry to clipboard |
 | `⌘P` | Pin / unpin selected |
 | `⌘D` | Delete selected entry |
+| `Delete` / `Backspace` | Edit search text (does not delete entries — use ⌘D) |
 | `Tab` | Toggle transform panel (no-op for image entries) |
 | `Escape` | Close panel (or close transform panel if open) |
 

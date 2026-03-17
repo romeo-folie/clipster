@@ -54,13 +54,16 @@ final class KeyboardMonitor: ObservableObject {
         // work whether the transform panel is open or closed, and with Caps Lock on.
         // Caps Lock, numeric-pad, function, and help flags are intentionally ignored
         // so that e.g. ⌘P with Caps Lock active still triggers pin/unpin.
+        // Strip Caps Lock (and other non-significant modifiers) so ⌘P/⌘D fire
+        // regardless of Caps Lock state. Use lowercased() on the character so
+        // ⌘P with Caps Lock on ("P") still matches ("p").
         let cmdSignificant = flags.subtracting([.capsLock, .numericPad, .function, .help])
         if cmdSignificant == .command {
-            if event.charactersIgnoringModifiers == "p" {
+            if event.charactersIgnoringModifiers?.lowercased() == "p" {
                 pinSelected(viewModel: viewModel)
                 return true
             }
-            if event.charactersIgnoringModifiers == "d" {
+            if event.charactersIgnoringModifiers?.lowercased() == "d" {
                 deleteSelected(viewModel: viewModel)
                 return true
             }
