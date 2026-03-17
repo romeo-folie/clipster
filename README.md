@@ -137,7 +137,7 @@ clipster clear --force   # no prompt
 
 ## GUI Keybindings
 
-> **GUI only** (`Clipster.app`). The search input is always focused; modifier combos work regardless of focus state.
+> **GUI only** (`Clipster.app`). The search input is auto-focused when the panel opens; modifier combos work regardless of focus state.
 
 | Key | Action |
 |-----|--------|
@@ -146,7 +146,7 @@ clipster clear --force   # no prompt
 | `Enter` | Paste selected entry |
 | `⌘P` | Pin / unpin selected |
 | `⌘D` | Delete selected entry |
-| `Tab` | Toggle transform panel |
+| `Tab` | Toggle transform panel (no-op for image entries) |
 | `Escape` | Close panel (or close transform panel if open) |
 
 ---

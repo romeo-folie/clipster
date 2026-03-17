@@ -90,8 +90,9 @@ final class KeyboardMonitor: ObservableObject {
             return true
         case 51,  // Backspace (⌫)
              117: // Forward Delete (⌦, also fn+Delete on laptop keyboards)
-            // Pass through — Delete/Backspace are handled by the search field.
-            // Use ⌘D to delete a list entry.
+            // Pass through — Delete/Backspace are forwarded to the search field
+            // when it holds focus (otherwise the event may be silently ignored).
+            // Use ⌘D to delete a list entry regardless of focus state.
             return false
         case 48:  // Tab
             // Image entries are not transformable; Tab should be a no-op.
