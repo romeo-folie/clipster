@@ -144,6 +144,7 @@ clipster clear --force   # no prompt
 | `↓` / `↑` | Move down / up |
 | Type any character | Filter entries live |
 | `Enter` | Paste selected entry |
+| `⌘Enter` | Copy selected entry to clipboard |
 | `⌘P` | Pin / unpin selected |
 | `⌘D` | Delete selected entry |
 | `Tab` | Toggle transform panel (no-op for image entries) |
