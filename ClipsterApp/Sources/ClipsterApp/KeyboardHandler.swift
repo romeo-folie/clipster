@@ -7,7 +7,9 @@ extension Notification.Name {
 }
 
 /// Handles keyboard events for the clipboard panel via NSEvent local monitor.
-/// Provides arrow key navigation, Enter (paste), ⌘Enter (copy), ⌘P (pin), Delete (delete), Escape (close).
+/// Provides arrow key navigation, Enter (paste), ⌘Enter (copy), ⌘P (pin/unpin),
+/// ⌘D (delete), Tab (transform panel), Escape (close).
+/// Delete/Backspace pass through to the search field and do not affect list entries.
 /// Uses NSEvent.addLocalMonitorForEvents for macOS 13+ compatibility.
 final class KeyboardMonitor: ObservableObject {
     private var monitor: Any?
@@ -88,8 +90,8 @@ final class KeyboardMonitor: ObservableObject {
             return true
         case 51,  // Backspace (⌫)
              117: // Forward Delete (⌦, also fn+Delete on laptop keyboards)
-            // Pass through to the text field — bare Delete/Backspace now only
-            // clears search input. Use ⌘D to delete a list entry.
+            // Pass through — Delete/Backspace are handled by the search field.
+            // Use ⌘D to delete a list entry.
             return false
         case 48:  // Tab
             // Image entries are not transformable; Tab should be a no-op.
@@ -105,13 +107,14 @@ final class KeyboardMonitor: ObservableObject {
             }
             return true
         default:
-            // ⌘P
-            if flags.contains(.command), event.charactersIgnoringModifiers == "p" {
+            let cmdOnly = event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command
+            // ⌘P — exact: Command only
+            if cmdOnly, event.charactersIgnoringModifiers == "p" {
                 pinSelected(viewModel: viewModel)
                 return true
             }
-            // ⌘D — delete selected entry regardless of search focus state
-            if flags.contains(.command), event.charactersIgnoringModifiers == "d" {
+            // ⌘D — exact: Command only (delete selected entry regardless of search focus state)
+            if cmdOnly, event.charactersIgnoringModifiers == "d" {
                 deleteSelected(viewModel: viewModel)
                 return true
             }

@@ -147,7 +147,7 @@ clipster clear --force   # no prompt
 | `⌘P` | Pin / unpin selected |
 | `⌘D` | Delete selected entry |
 | `Tab` | Toggle transform panel |
-| `Escape` | Dismiss search / close panel |
+| `Escape` | Close panel (or close transform panel if open) |
 
 ---
 
