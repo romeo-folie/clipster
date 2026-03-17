@@ -50,6 +50,22 @@ final class KeyboardMonitor: ObservableObject {
     ) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
+        // ⌘P / ⌘D are global — intercept before any panel-state branch so they
+        // work whether the transform panel is open or closed, and with Caps Lock on.
+        // Caps Lock, numeric-pad, function, and help flags are intentionally ignored
+        // so that e.g. ⌘P with Caps Lock active still triggers pin/unpin.
+        let cmdSignificant = flags.subtracting([.capsLock, .numericPad, .function, .help])
+        if cmdSignificant == .command {
+            if event.charactersIgnoringModifiers == "p" {
+                pinSelected(viewModel: viewModel)
+                return true
+            }
+            if event.charactersIgnoringModifiers == "d" {
+                deleteSelected(viewModel: viewModel)
+                return true
+            }
+        }
+
         if viewModel.showTransformPanel,
            let selected = selectedEntry(viewModel: viewModel),
            selected.contentType != .image {
@@ -108,17 +124,6 @@ final class KeyboardMonitor: ObservableObject {
             }
             return true
         default:
-            let cmdOnly = event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command
-            // ⌘P — exact: Command only
-            if cmdOnly, event.charactersIgnoringModifiers == "p" {
-                pinSelected(viewModel: viewModel)
-                return true
-            }
-            // ⌘D — exact: Command only (delete selected entry regardless of search focus state)
-            if cmdOnly, event.charactersIgnoringModifiers == "d" {
-                deleteSelected(viewModel: viewModel)
-                return true
-            }
             return false
         }
     }
