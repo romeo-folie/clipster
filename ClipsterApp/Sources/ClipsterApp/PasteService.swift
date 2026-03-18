@@ -6,6 +6,9 @@ import AppKit
 enum PasteService {
     /// Copy a text string to the system pasteboard and simulate ⌘V in the frontmost app.
     static func pasteToFrontApp(content: String, close: @escaping () -> Void) {
+        // Pause clipsterd monitoring before writing to pasteboard (prevents self-capture).
+        try? IPCClient.pauseMonitoring()
+
         // 1. Copy to pasteboard.
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -17,6 +20,8 @@ enum PasteService {
         // 3. After a short delay, send ⌘V to the now-frontmost app.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             simulatePaste()
+            // Resume after paste — also updates lastChangeCount to skip our write.
+            try? IPCClient.resumeMonitoring()
         }
     }
 
@@ -32,6 +37,9 @@ enum PasteService {
             // Thumbnail unreadable — nothing useful to paste.
             return
         }
+
+        // Pause clipsterd monitoring before writing to pasteboard (prevents self-capture).
+        try? IPCClient.pauseMonitoring()
 
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -54,6 +62,8 @@ enum PasteService {
         // 3. After a short delay, send ⌘V to the now-frontmost app.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             simulatePaste()
+            // Resume after paste — also updates lastChangeCount to skip our write.
+            try? IPCClient.resumeMonitoring()
         }
     }
 

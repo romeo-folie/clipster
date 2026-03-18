@@ -75,6 +75,16 @@ final class IPCClient {
         try send("delete", params: IPCParams(entryID: id))
     }
 
+    /// Tell clipsterd to pause clipboard monitoring (e.g. before writing to NSPasteboard).
+    static func pauseMonitoring() throws {
+        try send("pause_monitoring")
+    }
+
+    /// Tell clipsterd to resume clipboard monitoring (after paste completes).
+    static func resumeMonitoring() throws {
+        try send("resume_monitoring")
+    }
+
     // MARK: - Framing (mirrors IPCFraming in ClipsterCore)
 
     private static func encodeFrame(_ body: Data) -> Data {
