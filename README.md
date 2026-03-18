@@ -142,7 +142,7 @@ clipster clear --force   # no prompt
 | Key | Action |
 |-----|--------|
 | `↓` / `↑` | Move down / up |
-| Type any character | Filter entries live |
+| Type text | Filter entries live |
 | `Enter` | Paste selected entry |
 | `⌘Enter` | Copy selected entry to clipboard |
 | `⌘P` | Pin / unpin selected |
