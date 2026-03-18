@@ -101,7 +101,8 @@ final class KeyboardMonitor: ObservableObject {
             onClose()
             return true
         case 36:  // Return/Enter
-            if flags.contains(.command) {
+            if cmdSignificant == .command {
+                // ⌘Enter — copy to clipboard (same strict modifier check as ⌘P/⌘D)
                 copySelected(viewModel: viewModel, onClose: onClose)
             } else {
                 pasteSelected(viewModel: viewModel, onPaste: onPaste)
