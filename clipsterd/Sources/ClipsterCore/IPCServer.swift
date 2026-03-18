@@ -240,6 +240,14 @@ public final class IPCServer {
             // Return as entries format for consistency — empty list if monitor not available.
             return .transform(bundles.joined(separator: "\n"))
 
+        case "pause_monitoring":
+            monitor?.pauseMonitoring()
+            return .empty
+
+        case "resume_monitoring":
+            monitor?.resumeMonitoring()
+            return .empty
+
         case "daemon_status":
             let status = IPCDaemonStatus(
                 running: true,

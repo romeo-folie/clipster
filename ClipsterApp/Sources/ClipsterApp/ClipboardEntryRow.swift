@@ -80,6 +80,29 @@ struct ClipboardEntryRow: View {
         .onChange(of: isSelected) { _ in
             loadThumbnailsIfNeeded()
         }
+        .onChange(of: entry.id) { _ in
+            // Row was recycled with a new entry — clear cached state and reload.
+            rowThumbnailImage = nil
+            expandedPreviewImage = nil
+            loadThumbnailsIfNeeded()
+        }
+        // Retry thumbnail after a short delay if the daemon hasn't finished
+        // writing it yet (DB write lag between capture and thumbnail insert).
+        // A second retry at 1.5 s covers slow thumbnail generation for large images.
+        .task(id: entry.id) {
+            guard entry.contentType == .image else { return }
+            // First retry at 400 ms — covers the common case where the daemon
+            // finishes thumbnail generation just after onAppear fires.
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            if rowThumbnailImage == nil {
+                loadThumbnailsIfNeeded()
+            }
+            // Second retry at 1.5 s — covers slow/large images.
+            try? await Task.sleep(nanoseconds: 1_100_000_000)
+            if rowThumbnailImage == nil {
+                loadThumbnailsIfNeeded()
+            }
+        }
         .contextMenu {
             contextMenuItems
         }
@@ -156,8 +179,13 @@ struct ClipboardEntryRow: View {
         guard entry.contentType == .image else { return }
 
         if rowThumbnailImage == nil, let rowThumbnailProvider {
+            // Fast path: if the thumbnail is already in the in-memory cache,
+            // assign it synchronously on the current (main) thread to avoid
+            // a layout cycle. The cache-miss path dispatches to a background queue.
+            let provider = rowThumbnailProvider
+            let id = entry.id
             DispatchQueue.global(qos: .userInitiated).async {
-                guard let thumb = rowThumbnailProvider(entry.id) else { return }
+                guard let thumb = provider(id) else { return }
                 DispatchQueue.main.async {
                     self.rowThumbnailImage = thumb
                 }
@@ -165,8 +193,10 @@ struct ClipboardEntryRow: View {
         }
 
         if isSelected, expandedPreviewImage == nil, let expandedPreviewProvider {
+            let provider = expandedPreviewProvider
+            let id = entry.id
             DispatchQueue.global(qos: .userInitiated).async {
-                guard let preview = expandedPreviewProvider(entry.id) else { return }
+                guard let preview = provider(id) else { return }
                 DispatchQueue.main.async {
                     self.expandedPreviewImage = preview
                 }

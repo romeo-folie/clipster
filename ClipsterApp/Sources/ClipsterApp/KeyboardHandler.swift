@@ -7,7 +7,9 @@ extension Notification.Name {
 }
 
 /// Handles keyboard events for the clipboard panel via NSEvent local monitor.
-/// Provides arrow key navigation, Enter (paste), ⌘Enter (copy), ⌘P (pin), Delete (delete), Escape (close).
+/// Provides arrow key navigation, Enter (paste), ⌘Enter (copy), ⌘P (pin/unpin),
+/// ⌘D (delete), Tab (transform panel), Escape (close).
+/// Delete/Backspace pass through to the search field and do not affect list entries.
 /// Uses NSEvent.addLocalMonitorForEvents for macOS 13+ compatibility.
 final class KeyboardMonitor: ObservableObject {
     private var monitor: Any?
@@ -48,6 +50,25 @@ final class KeyboardMonitor: ObservableObject {
     ) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
+        // ⌘P / ⌘D are global — intercept before any panel-state branch so they
+        // work whether the transform panel is open or closed, and with Caps Lock on.
+        // Caps Lock, numeric-pad, function, and help flags are intentionally ignored
+        // so that e.g. ⌘P with Caps Lock active still triggers pin/unpin.
+        // Strip Caps Lock (and other non-significant modifiers) so ⌘P/⌘D fire
+        // regardless of Caps Lock state. Use lowercased() on the character so
+        // ⌘P with Caps Lock on ("P") still matches ("p").
+        let cmdSignificant = flags.subtracting([.capsLock, .numericPad, .function, .help])
+        if cmdSignificant == .command {
+            if event.charactersIgnoringModifiers?.lowercased() == "p" {
+                pinSelected(viewModel: viewModel)
+                return true
+            }
+            if event.charactersIgnoringModifiers?.lowercased() == "d" {
+                deleteSelected(viewModel: viewModel)
+                return true
+            }
+        }
+
         if viewModel.showTransformPanel,
            let selected = selectedEntry(viewModel: viewModel),
            selected.contentType != .image {
@@ -80,7 +101,8 @@ final class KeyboardMonitor: ObservableObject {
             onClose()
             return true
         case 36:  // Return/Enter
-            if flags.contains(.command) {
+            if cmdSignificant == .command {
+                // ⌘Enter — copy to clipboard (same strict modifier check as ⌘P/⌘D)
                 copySelected(viewModel: viewModel, onClose: onClose)
             } else {
                 pasteSelected(viewModel: viewModel, onPaste: onPaste)
@@ -88,15 +110,10 @@ final class KeyboardMonitor: ObservableObject {
             return true
         case 51,  // Backspace (⌫)
              117: // Forward Delete (⌦, also fn+Delete on laptop keyboards)
-            // Don't intercept when a text field has focus (e.g. the search bar).
-            // NSTextField uses an NSText field editor as first responder while
-            // the user is typing; checking for NSText covers that case for both
-            // Backspace and Forward Delete.
-            if let fr = NSApp.keyWindow?.firstResponder, fr is NSText {
-                return false
-            }
-            deleteSelected(viewModel: viewModel)
-            return true
+            // Pass through — Delete/Backspace are forwarded to the search field
+            // when it holds focus (otherwise the event may be silently ignored).
+            // Use ⌘D to delete a list entry regardless of focus state.
+            return false
         case 48:  // Tab
             // Image entries are not transformable; Tab should be a no-op.
             if let entry = selectedEntry(viewModel: viewModel), entry.contentType == .image {
@@ -111,11 +128,6 @@ final class KeyboardMonitor: ObservableObject {
             }
             return true
         default:
-            // ⌘P
-            if flags.contains(.command), event.charactersIgnoringModifiers == "p" {
-                pinSelected(viewModel: viewModel)
-                return true
-            }
             return false
         }
     }

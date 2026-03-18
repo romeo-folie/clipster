@@ -120,6 +120,8 @@ clipster clear --force   # no prompt
 
 ## TUI Keybindings
 
+> **CLI only.** The GUI uses different keybindings — see [GUI Keybindings](#gui-keybindings) below.
+
 | Key | Action |
 |-----|--------|
 | `j` / `↓` | Move down |
@@ -130,6 +132,24 @@ clipster clear --force   # no prompt
 | `d` | Delete (double-confirm) |
 | `t` | Open transform panel |
 | `q` / `Esc` | Quit |
+
+---
+
+## GUI Keybindings
+
+> **GUI only** (`Clipster.app`). The search input is auto-focused when the panel opens; modifier combos work regardless of focus state.
+
+| Key | Action |
+|-----|--------|
+| `↓` / `↑` | Move down / up |
+| Type text | Filter entries live |
+| `Enter` | Paste selected entry |
+| `⌘Enter` | Copy selected entry to clipboard |
+| `⌘P` | Pin / unpin selected |
+| `⌘D` | Delete selected entry |
+| `Delete` / `Backspace` | Edit search text (does not delete entries — use ⌘D) |
+| `Tab` | Toggle transform panel (no-op for image entries) |
+| `Escape` | Close panel (or close transform panel if open) |
 
 ---
 
