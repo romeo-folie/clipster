@@ -93,14 +93,25 @@ struct ClipboardEntryRow: View {
             guard entry.contentType == .image else { return }
             // First retry at 400 ms — covers the common case where the daemon
             // finishes thumbnail generation just after onAppear fires.
-            try? await Task.sleep(nanoseconds: 400_000_000)
-            if rowThumbnailImage == nil {
-                loadThumbnailsIfNeeded()
-            }
-            // Second retry at 1.5 s — covers slow/large images.
-            try? await Task.sleep(nanoseconds: 1_100_000_000)
-            if rowThumbnailImage == nil {
-                loadThumbnailsIfNeeded()
+            // `try await` (not `try?`) so CancellationError propagates when this
+            // task is cancelled (e.g. row scrolls off-screen or entry.id changes).
+            // Using `try?` would silently continue past the sleep and call
+            // loadThumbnailsIfNeeded() on a stale/recycled row.
+            do {
+                try await Task.sleep(nanoseconds: 400_000_000)
+                if rowThumbnailImage == nil {
+                    loadThumbnailsIfNeeded()
+                }
+                // Second retry at 1.5 s total from appearance (1.1 s after first retry) —
+                // covers slow/large image thumbnail generation.
+                try await Task.sleep(nanoseconds: 1_100_000_000)
+                if rowThumbnailImage == nil {
+                    loadThumbnailsIfNeeded()
+                }
+            } catch {
+                // CancellationError — task was cancelled (row off-screen or recycled).
+                // All other Task.sleep errors are also cancellation variants; nothing to do.
+                return
             }
         }
         .contextMenu {
