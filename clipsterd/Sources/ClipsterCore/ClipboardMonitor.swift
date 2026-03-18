@@ -27,6 +27,8 @@ public final class ClipboardMonitor {
     private var lastChangeCount: Int
     private var pollTimer: DispatchSourceTimer?
     private var debounceWorkItem: DispatchWorkItem?
+    /// Pause depth counter — monitoring is suppressed while > 0. Accessed only on monitorQueue.
+    private var pauseCount: Int = 0
 
     private let monitorQueue = DispatchQueue(
         label: "com.clipster.monitor",
@@ -79,6 +81,32 @@ public final class ClipboardMonitor {
         return Array(runtimeSuppressBundles).sorted()
     }
 
+    // MARK: - Pause / Resume
+
+    /// Pause clipboard monitoring. Calls stack — each pause needs a matching resume.
+    ///
+    /// Blocks until the pause is registered on monitorQueue so that any subsequent
+    /// pasteboard write by the caller is guaranteed not to be captured. Using async
+    /// here created a race: the 250ms poll timer could fire and detect the write
+    /// before the pauseCount increment was processed.
+    public func pauseMonitoring() {
+        monitorQueue.sync { [weak self] in
+            self?.pauseCount += 1
+        }
+    }
+
+    /// Resume monitoring (paired with pauseMonitoring). Updates lastChangeCount so the
+    /// paste-written content isn't captured as a new entry.
+    public func resumeMonitoring() {
+        monitorQueue.sync { [weak self] in
+            guard let self else { return }
+            if self.pauseCount > 0 { self.pauseCount -= 1 }
+            // Advance lastChangeCount to the current pasteboard state so the poll
+            // loop skips all changes that occurred while monitoring was paused.
+            self.lastChangeCount = NSPasteboard.general.changeCount
+        }
+    }
+
     // MARK: - Lifecycle
 
     /// Start polling. Safe to call once. Subsequent calls are no-ops.
@@ -123,6 +151,9 @@ public final class ClipboardMonitor {
         guard current != lastChangeCount else { return }
         lastChangeCount = current
 
+        // Skip capture when paused (e.g. PasteService is writing to pasteboard).
+        guard pauseCount == 0 else { return }
+
         // Capture frontmost app at detection time (start of debounce window).
         // source_confidence is 'high' if it doesn't change before capture() fires.
         // NSWorkspace must be accessed on main thread.
@@ -140,6 +171,7 @@ public final class ClipboardMonitor {
 
     private func capture(detectedApp: NSRunningApplication?) {
         // Called on monitorQueue after debounce window expires.
+        guard pauseCount == 0 else { return }
 
         // Get frontmost app at debounce expiry for source_confidence determination.
         let appAtCapture = DispatchQueue.main.sync {
