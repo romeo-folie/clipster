@@ -18,7 +18,9 @@ jobs:
   swift-tests:
     name: Swift tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 5
+    # Leave enough headroom for setup and the five-minute test watchdog to
+    # terminate a stuck xctest process and report a useful failure.
+    timeout-minutes: 7
     strategy:
       fail-fast: false
       matrix:
