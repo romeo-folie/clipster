@@ -55,10 +55,19 @@ jobs:
           # macos-15 occasionally leaves swift test hanging after output completion.
           # Run with an explicit timeout guard so the workflow can progress/fail deterministically.
           python3 - <<'PYEOF'
-          import subprocess, sys, threading
+          import platform, subprocess, sys, threading
 
           TIMEOUT_SEC = 5 * 60
-          proc = subprocess.Popen(["swift", "test"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+          command = ["swift", "test"]
+          if platform.mac_ver()[0].split(".")[0] == "14":
+              # Sonoma's headless arm64 runner intermittently blocks forever in
+              # NSPasteboard/NSWorkspace. Sequoia still runs these integrations;
+              # Sonoma continues to cover every non-pasteboard test.
+              command += [
+                  "--skip",
+                  "ClipboardMonitorTests|ContentClassifierTests.testHtml",
+              ]
+          proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
 
           def watchdog():
               try:
