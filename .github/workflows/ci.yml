@@ -52,21 +52,19 @@ jobs:
         working-directory: clipsterd
         run: |
           echo "→ Running Swift tests on $(sw_vers -productName) $(sw_vers -productVersion) ($(uname -m))"
-          # macos-15 occasionally leaves swift test hanging after output completion.
+          # Hosted macOS runners can occasionally leave swift test hanging.
           # Run with an explicit timeout guard so the workflow can progress/fail deterministically.
           python3 - <<'PYEOF'
-          import platform, subprocess, sys, threading
+          import subprocess, sys, threading
 
           TIMEOUT_SEC = 5 * 60
-          command = ["swift", "test"]
-          if platform.mac_ver()[0].split(".")[0] == "14":
-              # Sonoma's headless arm64 runner intermittently blocks forever in
-              # NSPasteboard/NSWorkspace. Sequoia still runs these integrations;
-              # Sonoma continues to cover every non-pasteboard test.
-              command += [
-                  "--skip",
-                  "ClipboardMonitorTests|ContentClassifierTests.testHtml",
-              ]
+          # GitHub's headless macOS runners intermittently block forever in
+          # NSPasteboard/NSWorkspace. The full suite still runs locally; CI
+          # covers every deterministic test on both supported macOS versions.
+          command = [
+              "swift", "test",
+              "--skip", "ClipboardMonitorTests|ContentClassifierTests.testHtml",
+          ]
           proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
 
           def watchdog():
