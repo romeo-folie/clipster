@@ -1,5 +1,6 @@
 import ClipsterCore
 import Foundation
+import GRDB
 import XCTest
 #if canImport(AppKit)
 import AppKit
@@ -86,13 +87,69 @@ final class DatabaseTests: XCTestCase {
         XCTAssertEqual(try db.entryCount(), 2)
     }
 
-    func testDeduplicationOnlyChecksLatestEntry() throws {
+    func testDeduplicationRefreshesNonConsecutiveDuplicate() throws {
         let db = try makeDB()
         try db.insert(entry(content: "A"))
         try db.insert(entry(content: "B"))
-        // "A" is no longer the most recent — re-inserting it must succeed
         try db.insert(entry(content: "A"))
-        XCTAssertEqual(try db.entryCount(), 3)
+        XCTAssertEqual(try db.entryCount(), 2)
+        XCTAssertEqual(try db.latestEntry()?.content, "A")
+    }
+
+    func testDeduplicationPreservesStableIDAndPinState() throws {
+        let db = try makeDB()
+        try db.insert(entry(content: "keep-me"))
+        guard let original = try db.latestEntry() else {
+            return XCTFail("Expected inserted entry")
+        }
+        try db.setPin(id: original.id, pinned: true)
+
+        try db.insert(entry(content: "other"))
+        try db.insert(entry(content: "keep-me"))
+
+        XCTAssertEqual(try db.entryCount(), 2)
+        XCTAssertEqual(try db.latestEntry()?.id, original.id)
+        XCTAssertEqual(try db.listPinned().first?.id, original.id)
+    }
+
+    func testDeduplicationCollapsesLegacyRowsAndPreservesPinnedCanonicalEntry() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clipster-test-\(UUID().uuidString).db")
+        let db = try ClipsterDatabase(url: url)
+        try db.insert(entry(content: "legacy-duplicate"))
+        guard let original = try db.latestEntry() else {
+            return XCTFail("Expected inserted entry")
+        }
+        try db.setPin(id: original.id, pinned: true)
+
+        // Seed a row shaped like history created by the old latest-only policy.
+        let rawDB = try DatabaseQueue(path: url.path)
+        try rawDB.write { database in
+            try database.execute(
+                sql: """
+                    INSERT INTO entries
+                        (id, content_type, content, preview, source_confidence,
+                         created_at, is_pinned, content_hash)
+                    VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+                """,
+                arguments: [
+                    "legacy-copy",
+                    original.contentType,
+                    original.content,
+                    original.preview,
+                    original.sourceConfidence,
+                    original.createdAt + 1,
+                    original.contentHash,
+                ]
+            )
+        }
+        XCTAssertEqual(try db.entryCount(), 2)
+
+        try db.insert(entry(content: "legacy-duplicate"))
+
+        XCTAssertEqual(try db.entryCount(), 1)
+        XCTAssertEqual(try db.latestEntry()?.id, original.id)
+        XCTAssertEqual(try db.listPinned().first?.id, original.id)
     }
 
     // MARK: - IDs and timestamps

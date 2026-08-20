@@ -117,8 +117,9 @@ public final class ClipsterDatabase {
 
     /// Insert a captured clipboard entry.
     ///
-    /// Deduplication: if the most recent entry shares the same content hash,
-    /// the write is silently dropped (PRD §7.1 deduplication rule).
+    /// Deduplication: if any existing entry shares the same content hash, that
+    /// entry is refreshed and moved to the top instead of creating a duplicate.
+    /// Its pin state and stable ID are preserved.
     ///
     /// - Throws: `DatabaseError` on SQLite failure.
     public func insert(_ entry: ClipboardEntry) throws {
@@ -134,22 +135,60 @@ public final class ClipsterDatabase {
         let preview = String(entry.content.prefix(200))
         let createdAt = Int64(entry.capturedAt.timeIntervalSince1970 * 1000)
 
-        // Deduplication check — most recent entry only (PRD §7.1).
-        // String.fetchOne returns nil when history is empty — not a duplicate.
-        let isDuplicate = try dbQueue.read { db -> Bool in
-            let latestHash = try String.fetchOne(
+        let thumbnail = entry.contentType == .image
+            ? entry.imageData.flatMap(generateThumbnail(from:))
+            : nil
+
+        let refreshedID = try dbQueue.write { db -> String? in
+            let existingID = try String.fetchOne(
                 db,
-                sql: "SELECT content_hash FROM entries ORDER BY created_at DESC LIMIT 1"
+                sql: """
+                    SELECT id FROM entries
+                    WHERE content_hash = ?
+                    ORDER BY is_pinned DESC, created_at DESC
+                    LIMIT 1
+                """,
+                arguments: [hash]
             )
-            return latestHash == hash
-        }
 
-        if isDuplicate {
-            logger.debug("Duplicate content — discarding entry")
-            return
-        }
+            if let existingID {
+                // Older versions only compared against the latest row, so upgraded
+                // databases may already contain this hash more than once. Prefer a
+                // pinned canonical row, then remove every redundant copy atomically.
+                try db.execute(
+                    sql: "DELETE FROM entries WHERE content_hash = ? AND id <> ?",
+                    arguments: [hash, existingID]
+                )
+                let latestCreatedAt = try Int64.fetchOne(
+                    db,
+                    sql: "SELECT MAX(created_at) FROM entries"
+                ) ?? createdAt
+                // Copies can occur within the same millisecond. Advancing past the
+                // current maximum makes the refreshed row deterministically newest.
+                let refreshedCreatedAt = max(createdAt, latestCreatedAt + 1)
+                try db.execute(
+                    sql: """
+                        UPDATE entries
+                        SET content_type = ?, content = ?, preview = ?,
+                            source_bundle = ?, source_name = ?, source_confidence = ?,
+                            created_at = ?
+                        WHERE id = ?
+                    """,
+                    arguments: [
+                        entry.contentType.rawValue,
+                        entry.content,
+                        preview,
+                        entry.sourceBundle,
+                        entry.sourceName,
+                        entry.sourceConfidence.rawValue,
+                        refreshedCreatedAt,
+                        existingID,
+                    ]
+                )
+                try updateThumbnail(thumbnail, for: existingID, in: db)
+                return existingID
+            }
 
-        try dbQueue.write { db in
             try db.execute(
                 sql: """
                     INSERT INTO entries
@@ -173,21 +212,15 @@ public final class ClipsterDatabase {
                     hash,
                 ]
             )
-
-            // Image thumbnail — PRD §7.1 / AC-CAP-04
-            if entry.contentType == .image, let rawData = entry.imageData {
-                if let thumb = generateThumbnail(from: rawData) {
-                    try db.execute(
-                        sql: "INSERT OR REPLACE INTO thumbnails (entry_id, data) VALUES (?, ?)",
-                        arguments: [entry.id, thumb]
-                    )
-                } else {
-                    logger.warn("Thumbnail generation failed for entry \(entry.id) — storing entry without thumbnail")
-                }
-            }
+            try updateThumbnail(thumbnail, for: entry.id, in: db)
+            return nil
         }
 
-        logger.debug("Inserted entry \(entry.id) [\(entry.contentType.rawValue)]")
+        if let refreshedID {
+            logger.debug("Refreshed duplicate entry \(refreshedID) and moved it to the top")
+        } else {
+            logger.debug("Inserted entry \(entry.id) [\(entry.contentType.rawValue)]")
+        }
 
         // History pruning — PRD §7.2 / AC-DB-01 + AC-DB-02
         try pruneIfNeeded()
@@ -439,6 +472,19 @@ public final class ClipsterDatabase {
             }
         }
         return nil  // Cannot fit in 2MB even at lowest quality
+    }
+
+    /// Keeps thumbnail state consistent when an existing hash is refreshed with
+    /// newly classified content. Called only from inside a database write.
+    private func updateThumbnail(_ thumbnail: Data?, for entryID: String, in db: Database) throws {
+        if let thumbnail {
+            try db.execute(
+                sql: "INSERT OR REPLACE INTO thumbnails (entry_id, data) VALUES (?, ?)",
+                arguments: [entryID, thumbnail]
+            )
+        } else {
+            try db.execute(sql: "DELETE FROM thumbnails WHERE entry_id = ?", arguments: [entryID])
+        }
     }
 
     // MARK: - Helpers

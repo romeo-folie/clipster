@@ -28,6 +28,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         // Hide dock icon — menu bar only.
         NSApp.setActivationPolicy(.accessory)
 
+        // Make the menu-bar app available after restarts without requiring the
+        // user to discover Settings first. A manual opt-out is remembered.
+        SettingsViewModel.enableLaunchAtLoginByDefaultIfNeeded()
+
         setupStatusItem()
         setupPopover()
         setupEventMonitor()

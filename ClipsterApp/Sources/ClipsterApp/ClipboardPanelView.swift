@@ -89,6 +89,12 @@ struct ClipboardPanelView: View {
                 .animation(.easeInOut(duration: 0.2), value: viewModel.showTransformPanel)
             }
         }
+        .onChange(of: viewModel.searchQuery) { _ in
+            viewModel.reconcileSelection()
+        }
+        .onChange(of: viewModel.selectedCategory) { _ in
+            viewModel.reconcileSelection()
+        }
     }
 
     private var selectedEntry: ClipboardEntry? {
@@ -126,42 +132,85 @@ struct ClipboardPanelView: View {
     // MARK: - Search Field
 
     private var searchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(Theme.secondaryText(for: colorScheme))
-                .font(.system(size: 14))
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(Theme.secondaryText(for: colorScheme))
+                    .font(.system(size: 14))
 
-            FocusedTextField(
-                text: $viewModel.searchQuery,
-                placeholder: "Search…"
-            )
-            .frame(height: 20)
-            .foregroundColor(Theme.primaryText(for: colorScheme))
+                FocusedTextField(
+                    text: $viewModel.searchQuery,
+                    placeholder: "Search…"
+                )
+                .frame(height: 20)
+                .foregroundColor(Theme.primaryText(for: colorScheme))
 
-            if !viewModel.searchQuery.isEmpty {
-                Button {
-                    viewModel.searchQuery = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(Theme.secondaryText(for: colorScheme))
-                        .font(.system(size: 13))
+                if !viewModel.searchQuery.isEmpty {
+                    Button {
+                        viewModel.searchQuery = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(Theme.secondaryText(for: colorScheme))
+                            .font(.system(size: 13))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear search")
+                    .transition(.opacity)
                 }
-                .buttonStyle(.plain)
-                .transition(.opacity)
             }
+            .padding(.horizontal, 10)
+            .frame(height: Theme.searchFieldHeight)
+            .background(Theme.searchFieldBackground(for: colorScheme))
+            .cornerRadius(Theme.searchFieldCornerRadius)
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.searchFieldCornerRadius)
+                    .stroke(Theme.searchFieldBorder(for: colorScheme), lineWidth: 1)
+            )
+
+            categoryPicker
         }
-        .padding(.horizontal, 10)
-        .frame(height: Theme.searchFieldHeight)
-        .background(Theme.searchFieldBackground(for: colorScheme))
-        .cornerRadius(Theme.searchFieldCornerRadius)
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.searchFieldCornerRadius)
-                .stroke(Theme.searchFieldBorder(for: colorScheme), lineWidth: 1)
-        )
         .padding(.horizontal, Theme.panelPadding)
         .padding(.top, Theme.panelPadding)
         .padding(.bottom, 8)
         .animation(.easeInOut(duration: 0.15), value: viewModel.searchQuery.isEmpty)
+    }
+
+    private var categoryPicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(ClipboardCategory.allCases) { category in
+                    let isSelected = viewModel.selectedCategory == category
+                    Button(category.title) {
+                        viewModel.selectedCategory = category
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                    .foregroundColor(
+                        isSelected
+                            ? Theme.primaryText(for: colorScheme)
+                            : Theme.secondaryText(for: colorScheme)
+                    )
+                    .padding(.horizontal, 9)
+                    .frame(height: 24)
+                    .background(
+                        isSelected
+                            ? Theme.rowHover(for: colorScheme)
+                            : Color.clear
+                    )
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule().stroke(
+                            isSelected
+                                ? Theme.iconTint(for: colorScheme).opacity(0.7)
+                                : Theme.separator(for: colorScheme),
+                            lineWidth: 1
+                        )
+                    )
+                    .accessibilityLabel("Show \(category.title.lowercased()) clipboard items")
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                }
+            }
+        }
     }
 
     // MARK: - Section Header
@@ -184,7 +233,7 @@ struct ClipboardPanelView: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Spacer(minLength: 60)
-            if viewModel.searchQuery.isEmpty {
+            if viewModel.searchQuery.isEmpty && viewModel.selectedCategory == .all {
                 Image(systemName: "doc.on.clipboard")
                     .font(.system(size: 36))
                     .foregroundColor(Theme.secondaryText(for: colorScheme))
@@ -194,12 +243,23 @@ struct ClipboardPanelView: View {
                 Text("Copy anything to get started. Access Clipster with ⌘⇧V")
                     .font(.system(size: 12))
                     .foregroundColor(Theme.secondaryText(for: colorScheme).opacity(0.7))
+            } else if viewModel.searchQuery.isEmpty {
+                Text("No \(viewModel.selectedCategory.title.lowercased()) yet")
+                    .font(.system(size: 14))
+                    .foregroundColor(Theme.secondaryText(for: colorScheme))
+                Button("Show all") {
+                    viewModel.selectedCategory = .all
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.accentColor)
+                .font(.system(size: 12))
             } else {
                 Text("No matches for \"\(viewModel.searchQuery)\"")
                     .font(.system(size: 14))
                     .foregroundColor(Theme.secondaryText(for: colorScheme))
-                Button("Clear search") {
+                Button("Clear filters") {
                     viewModel.searchQuery = ""
+                    viewModel.selectedCategory = .all
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.accentColor)

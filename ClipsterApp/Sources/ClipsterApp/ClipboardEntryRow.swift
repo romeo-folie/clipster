@@ -28,14 +28,19 @@ struct ClipboardEntryRow: View {
             HStack(spacing: 10) {
                 // Type icon
                 typeIcon
-                    .frame(width: 20, height: 20)
+                    .frame(
+                        width: entry.contentType == .image ? 52 : 20,
+                        height: entry.contentType == .image ? 42 : 20
+                    )
 
                 // Content preview
-                Text(entry.preview)
-                    .font(entry.contentType == .code ? .system(size: 13, design: .monospaced) : Theme.primaryFont)
-                    .foregroundColor(Theme.primaryText(for: colorScheme))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                if entry.contentType != .image {
+                    Text(entry.preview)
+                        .font(entry.contentType == .code ? .system(size: 13, design: .monospaced) : Theme.primaryFont)
+                        .foregroundColor(Theme.primaryText(for: colorScheme))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
 
                 Spacer(minLength: 4)
 
@@ -150,8 +155,8 @@ struct ClipboardEntryRow: View {
             Image(nsImage: rowThumbnailImage)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
-                .frame(width: Theme.iconSize + 2, height: Theme.iconSize + 2)
-                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .frame(width: 48, height: 38)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         } else if entry.contentType == .richText {
             // Rich text: styled A with RTF badge
             ZStack(alignment: .bottomTrailing) {

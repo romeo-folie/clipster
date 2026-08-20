@@ -8,8 +8,8 @@ extension Notification.Name {
 
 /// Handles keyboard events for the clipboard panel via NSEvent local monitor.
 /// Provides arrow key navigation, Enter (paste), ⌘Enter (copy), ⌘P (pin/unpin),
-/// ⌘D (delete), Tab (transform panel), Escape (close).
-/// Delete/Backspace pass through to the search field and do not affect list entries.
+/// Forward Delete or ⌘D (delete), Tab (transform panel), Escape (close).
+/// Backspace always passes through for safe search editing.
 /// Uses NSEvent.addLocalMonitorForEvents for macOS 13+ compatibility.
 final class KeyboardMonitor: ObservableObject {
     private var monitor: Any?
@@ -50,14 +50,26 @@ final class KeyboardMonitor: ObservableObject {
     ) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
-        // ⌘P / ⌘D are global — intercept before any panel-state branch so they
+        // ⌘P / legacy ⌘D are global — intercept before any panel-state branch so they
         // work whether the transform panel is open or closed, and with Caps Lock on.
         // Caps Lock, numeric-pad, function, and help flags are intentionally ignored
         // so that e.g. ⌘P with Caps Lock active still triggers pin/unpin.
-        // Strip Caps Lock (and other non-significant modifiers) so ⌘P/⌘D fire
+        // Strip Caps Lock (and other non-significant modifiers) so shortcuts fire
         // regardless of Caps Lock state. Use lowercased() on the character so
         // ⌘P with Caps Lock on ("P") still matches ("p").
         let cmdSignificant = flags.subtracting([.capsLock, .numericPad, .function, .help])
+
+        // Backspace (key code 51) must always pass through to search editing. Treating
+        // an extra Backspace on an empty query as delete is too easy to trigger by accident.
+        // Forward Delete (key code 117, including fn+Backspace) is the dedicated list action.
+        if event.keyCode == 117 {
+            deleteSelected(viewModel: viewModel)
+            return true
+        }
+        if event.keyCode == 51 {
+            return false
+        }
+
         if cmdSignificant == .command {
             if event.charactersIgnoringModifiers?.lowercased() == "p" {
                 pinSelected(viewModel: viewModel)
@@ -108,12 +120,6 @@ final class KeyboardMonitor: ObservableObject {
                 pasteSelected(viewModel: viewModel, onPaste: onPaste)
             }
             return true
-        case 51,  // Backspace (⌫)
-             117: // Forward Delete (⌦, also fn+Delete on laptop keyboards)
-            // Pass through — Delete/Backspace are forwarded to the search field
-            // when it holds focus (otherwise the event may be silently ignored).
-            // Use ⌘D to delete a list entry regardless of focus state.
-            return false
         case 48:  // Tab
             // Image entries are not transformable; Tab should be a no-op.
             if let entry = selectedEntry(viewModel: viewModel), entry.contentType == .image {

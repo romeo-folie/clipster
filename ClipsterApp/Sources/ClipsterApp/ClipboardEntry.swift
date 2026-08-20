@@ -11,7 +11,7 @@ struct ClipboardEntry: Identifiable {
     let isPinned: Bool
 
     /// Content type determines the icon shown in each row.
-    enum ContentType: String {
+    enum ContentType: String, Hashable {
         case plainText = "plain-text"
         case richText = "rich-text"
         case image = "image"
@@ -43,6 +43,65 @@ struct ClipboardEntry: Identifiable {
             case .image, .url, .file, .phone: return true
             default: return false
             }
+        }
+
+        /// User-facing keywords that make text search useful even when an entry's
+        /// preview does not contain a category name (notably image entries).
+        var searchTerms: [String] {
+            switch self {
+            case .plainText: return ["text", "plain text"]
+            case .richText: return ["text", "rich text", "rtf"]
+            case .image: return ["image", "images", "photo", "picture", "pic"]
+            case .url: return ["url", "link", "website"]
+            case .file: return ["file", "document"]
+            case .code: return ["code", "snippet"]
+            case .colour: return ["colour", "color", "hex", "rgb", "hsl"]
+            case .email: return ["email", "mail"]
+            case .phone: return ["phone", "telephone", "tel", "number"]
+            }
+        }
+    }
+}
+
+/// A single-select content scope that composes with the free-text search field.
+enum ClipboardCategory: String, CaseIterable, Identifiable {
+    case all
+    case text
+    case links
+    case images
+    case colors
+    case code
+    case email
+    case phone
+    case files
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: return "All"
+        case .text: return "Text"
+        case .links: return "Links"
+        case .images: return "Images"
+        case .colors: return "Colors"
+        case .code: return "Code"
+        case .email: return "Email"
+        case .phone: return "Phone"
+        case .files: return "Files"
+        }
+    }
+
+    func contains(_ contentType: ClipboardEntry.ContentType) -> Bool {
+        switch self {
+        case .all: return true
+        case .text: return contentType == .plainText || contentType == .richText
+        case .links: return contentType == .url
+        case .images: return contentType == .image
+        case .colors: return contentType == .colour
+        case .code: return contentType == .code
+        case .email: return contentType == .email
+        case .phone: return contentType == .phone
+        case .files: return contentType == .file
         }
     }
 }

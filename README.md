@@ -146,10 +146,14 @@ clipster clear --force   # no prompt
 | `Enter` | Paste selected entry |
 | `⌘Enter` | Copy selected entry to clipboard |
 | `⌘P` | Pin / unpin selected |
-| `⌘D` | Delete selected entry |
-| `Delete` / `Backspace` | Edit search text (does not delete entries — use ⌘D) |
+| `Forward Delete` / `fn`+`Delete` | Delete selected entry |
+| `⌘D` | Delete selected entry on any keyboard |
+| `Delete` / `Backspace` | Edit search text only; never deletes list items |
 | `Tab` | Toggle transform panel (no-op for image entries) |
 | `Escape` | Close panel (or close transform panel if open) |
+
+Use the category chips below search to show Text, Links, Images, Colors, Code,
+Email, Phone, or Files. Category selection composes with the text query.
 
 ---
 
