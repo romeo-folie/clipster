@@ -6,6 +6,7 @@ import SwiftUI
 /// and refreshes periodically. Falls back to sample data if the database is unavailable.
 final class ClipboardViewModel: ObservableObject {
     @Published var searchQuery = ""
+    @Published var selectedCategory: ClipboardCategory = .all
     @Published var selectedID: String?
     @Published var showTransformPanel = false
     @Published var pinnedEntries: [ClipboardEntry] = []
@@ -32,15 +33,11 @@ final class ClipboardViewModel: ObservableObject {
     // MARK: - Filtering
 
     var filteredPinned: [ClipboardEntry] {
-        guard !searchQuery.isEmpty else { return pinnedEntries }
-        let q = searchQuery.lowercased()
-        return pinnedEntries.filter { matches($0, query: q) }
+        pinnedEntries.filter(matchesCurrentFilters)
     }
 
     var filteredHistory: [ClipboardEntry] {
-        guard !searchQuery.isEmpty else { return historyEntries }
-        let q = searchQuery.lowercased()
-        return historyEntries.filter { matches($0, query: q) }
+        historyEntries.filter(matchesCurrentFilters)
     }
 
     // MARK: - Write Actions (all writes go through IPC to clipsterd)
@@ -112,17 +109,20 @@ final class ClipboardViewModel: ObservableObject {
     /// Returns true if an entry matches the search query.
     /// Matches against preview text AND content type keyword so that typing
     /// "image", "url", "code" etc. filters by category regardless of display text.
-    private func matches(_ entry: ClipboardEntry, query: String) -> Bool {
-        if entry.preview.lowercased().contains(query) { return true }
-        if entry.contentType.rawValue.lowercased().contains(query) { return true }
-        // Also allow friendly aliases: "link" → url, "pic"/"photo" → image.
-        switch query {
-        case "link":          return entry.contentType == .url
-        case "pic", "photo":  return entry.contentType == .image
-        case "text":          return entry.contentType == .plainText
-        case "colour", "color": return entry.contentType == .colour
-        default:              return false
-        }
+    private func matchesCurrentFilters(_ entry: ClipboardEntry) -> Bool {
+        guard selectedCategory.contains(entry.contentType) else { return false }
+        let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return true }
+        if entry.preview.lowercased().contains(q) { return true }
+        if entry.contentType.rawValue.lowercased().contains(q) { return true }
+        return entry.contentType.searchTerms.contains(q)
+    }
+
+    /// Keeps keyboard actions attached to a visible result after search or scope changes.
+    func reconcileSelection() {
+        let visible = filteredPinned + filteredHistory
+        if let selectedID, visible.contains(where: { $0.id == selectedID }) { return }
+        selectedID = visible.first?.id
     }
 
     // MARK: - Thumbnail prefetch

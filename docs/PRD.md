@@ -136,7 +136,7 @@ The entry schema includes a `source_confidence` field:
 - `"high"` — frontmost app has not changed during the debounce window
 - `"low"` — frontmost app changed at least once during the debounce window
 
-**Deduplication:** If the new entry's content hash matches the most recent entry in history, the copy is discarded (no duplicate created, timestamp not updated).
+**Deduplication:** If the new entry's content hash matches any entry in history, the existing entry is refreshed and moved to the top. Its stable ID and pin state are preserved; no duplicate is created.
 
 **Password Manager Suppression:** Any app whose bundle ID matches the configurable `suppress_bundles` list in `~/.config/clipster/config.toml` (defaults: 1Password, Bitwarden, Dashlane, LastPass) does not have its clipboard activity recorded. Content from suppressed apps is silently dropped — no placeholder entry is created.
 
@@ -666,7 +666,7 @@ Distribution for v1 is via two shell scripts hosted alongside the GitHub Release
 | ID | Criteria | Pass condition |
 |---|---|---|
 | AC-CAP-01 | Plain text copied in any app is captured within 350ms of the copy event | Entry appears in history within 350ms (250ms poll + 50ms debounce + processing margin) |
-| AC-CAP-02 | Duplicate copy of the most recent entry is not stored | History count unchanged after duplicate copy |
+| AC-CAP-02 | Recopying any existing unpinned entry refreshes it instead of storing a duplicate | Entry moves to the top and history count remains unchanged |
 | AC-CAP-03 | Content from a suppressed app is not stored | No entry created; no placeholder shown |
 | AC-CAP-04 | Image is stored as JPEG thumbnail ≤ 2MB, ≤ 400px wide | File size and dimensions verified in DB |
 | AC-CAP-05 | `source_confidence` is `"low"` when frontmost app changes during debounce window | Simulate rapid app switch; verify field value |

@@ -1,4 +1,5 @@
 import ClipsterCore
+import Darwin
 import Foundation
 import ServiceManagement
 import SwiftUI
@@ -11,13 +12,26 @@ enum AppearanceMode: String, CaseIterable {
 /// Manages user settings, backed by UserDefaults.
 /// On change, syncs relevant values to clipsterd config file.
 final class SettingsViewModel: ObservableObject {
+    private static let launchAtLoginEnabledKey = "launchAtLoginEnabled"
+    private static let fallbackLoginAgentLabel = "com.clipster.app.login"
+
+    private static var fallbackLoginAgentURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/LaunchAgents/\(fallbackLoginAgentLabel).plist")
+    }
+
     // MARK: - General
 
     @AppStorage("entryLimit") var entryLimit: Int = 500
     @AppStorage("dbSizeCap") var dbSizeCap: Int = 500
     @Published var launchAtLogin: Bool = true {
-        didSet { updateLaunchAtLogin() }
+        didSet {
+            guard !isLoadingLaunchAtLogin else { return }
+            UserDefaults.standard.set(launchAtLogin, forKey: Self.launchAtLoginEnabledKey)
+            updateLaunchAtLogin()
+        }
     }
+    private var isLoadingLaunchAtLogin = true
     @AppStorage("appearance") var appearance: AppearanceMode = .auto {
         didSet { applyAppearance() }
     }
@@ -42,6 +56,7 @@ final class SettingsViewModel: ObservableObject {
         loadSuppressedApps()
         checkCLIInstalled()
         loadLaunchAtLogin()
+        isLoadingLaunchAtLogin = false
         applyAppearance()
     }
 
@@ -78,6 +93,37 @@ final class SettingsViewModel: ObservableObject {
     private func loadLaunchAtLogin() {
         if #available(macOS 13.0, *) {
             launchAtLogin = SMAppService.mainApp.status == .enabled
+                || FileManager.default.fileExists(atPath: Self.fallbackLoginAgentURL.path)
+        }
+    }
+
+    /// Registers the current app bundle once, on first launch. Subsequent starts
+    /// respect the user's explicit toggle choice, including an opt-out.
+    static func enableLaunchAtLoginByDefaultIfNeeded() {
+        guard #available(macOS 13.0, *) else { return }
+        let storedPreference = UserDefaults.standard.object(forKey: launchAtLoginEnabledKey) as? Bool
+        guard storedPreference ?? true else { return }
+        if SMAppService.mainApp.status == .enabled {
+            UserDefaults.standard.set(true, forKey: launchAtLoginEnabledKey)
+            return
+        }
+        if FileManager.default.fileExists(atPath: fallbackLoginAgentURL.path) {
+            // The app may have moved since the fallback was first written. Refresh
+            // its bundle path on every manual launch before treating it as enabled.
+            if registerFallbackLoginAgent() {
+                UserDefaults.standard.set(true, forKey: launchAtLoginEnabledKey)
+            }
+            return
+        }
+        do {
+            try SMAppService.mainApp.register()
+            UserDefaults.standard.set(true, forKey: launchAtLoginEnabledKey)
+        } catch {
+            // Unsigned development bundles may not be eligible for SMAppService.
+            // A per-user LaunchAgent provides the same login behavior for local builds.
+            if registerFallbackLoginAgent() {
+                UserDefaults.standard.set(true, forKey: launchAtLoginEnabledKey)
+            }
         }
     }
 
@@ -85,17 +131,72 @@ final class SettingsViewModel: ObservableObject {
         if #available(macOS 13.0, *) {
             do {
                 if launchAtLogin {
-                    try SMAppService.mainApp.register()
+                    do {
+                        try SMAppService.mainApp.register()
+                        Self.removeFallbackLoginAgent()
+                    } catch {
+                        guard Self.registerFallbackLoginAgent() else { throw error }
+                    }
                 } else {
-                    try SMAppService.mainApp.unregister()
+                    if SMAppService.mainApp.status == .enabled {
+                        try SMAppService.mainApp.unregister()
+                    }
+                    Self.removeFallbackLoginAgent()
                 }
             } catch {
                 // Registration failed — revert state.
                 DispatchQueue.main.async { [weak self] in
+                    self?.isLoadingLaunchAtLogin = true
                     self?.launchAtLogin = SMAppService.mainApp.status == .enabled
+                        || FileManager.default.fileExists(atPath: Self.fallbackLoginAgentURL.path)
+                    self?.isLoadingLaunchAtLogin = false
                 }
             }
         }
+    }
+
+    /// Installs a user LaunchAgent that asks LaunchServices to open this exact app
+    /// bundle at login. Used only when SMAppService rejects an unsigned local build.
+    @discardableResult
+    private static func registerFallbackLoginAgent() -> Bool {
+        let plist: [String: Any] = [
+            "Label": fallbackLoginAgentLabel,
+            "ProgramArguments": ["/usr/bin/open", Bundle.main.bundlePath],
+            "RunAtLoad": true,
+        ]
+
+        do {
+            let data = try PropertyListSerialization.data(
+                fromPropertyList: plist,
+                format: .xml,
+                options: 0
+            )
+            let url = fallbackLoginAgentURL
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try data.write(to: url, options: .atomic)
+            runLaunchctl(["bootstrap", "gui/\(getuid())", url.path])
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private static func removeFallbackLoginAgent() {
+        let url = fallbackLoginAgentURL
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        runLaunchctl(["bootout", "gui/\(getuid())", url.path])
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    private static func runLaunchctl(_ arguments: [String]) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        process.arguments = arguments
+        try? process.run()
+        process.waitUntilExit()
     }
 
     // MARK: - Suppress List

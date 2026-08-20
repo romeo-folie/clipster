@@ -87,7 +87,7 @@ Stateless. Called on each debounced pasteboard change. Detects content type in p
 
 ### `ClipsterDatabase`
 GRDB-backed SQLite wrapper. Single writer (`clipsterd`). WAL mode. Versioned migrations. Responsibilities:
-- Insert entries with deduplication (same content hash as most recent = dropped)
+- Insert entries with history-wide deduplication (an existing content hash is refreshed and moved to the top)
 - Generate JPEG thumbnails for image entries (≤ 400px wide, ≤ 2MB)
 - Enforce `entry_limit` and `db_size_cap_mb` after each insert (pinned entries never pruned)
 - VACUUM after bulk deletions (≥10 rows)
