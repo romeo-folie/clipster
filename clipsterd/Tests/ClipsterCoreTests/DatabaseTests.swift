@@ -42,6 +42,58 @@ final class DatabaseTests: XCTestCase {
         XCTAssertNil(try db.latestEntry())
     }
 
+    func testReadOnlyConnectionSeesExistingAndNewEntries() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clipster-read-only-test-\(UUID().uuidString).db")
+        let writer = try ClipsterDatabase(url: url)
+        try writer.insert(entry(content: "existing"))
+
+        let reader = try ClipsterDatabase(url: url, accessMode: .readOnly)
+        XCTAssertEqual(try reader.list(limit: 10).map(\.content), ["existing"])
+
+        try writer.insert(entry(content: "new"))
+        XCTAssertEqual(try reader.list(limit: 10).map(\.content), ["new", "existing"])
+    }
+
+    func testReadOnlyConnectionOpensAfterWriterCloses() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clipster-read-only-closed-writer-\(UUID().uuidString).db")
+        var writer: ClipsterDatabase? = try ClipsterDatabase(url: url)
+        try writer?.insert(entry(content: "persisted WAL entry"))
+        writer = nil
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path + "-wal"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path + "-shm"))
+        let reader = try ClipsterDatabase(url: url, accessMode: .readOnly)
+        XCTAssertEqual(try reader.latestEntry()?.content, "persisted WAL entry")
+    }
+
+    func testReadOnlyConnectionRejectsWrites() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clipster-read-only-test-\(UUID().uuidString).db")
+        let writer = try ClipsterDatabase(url: url)
+        let reader = try ClipsterDatabase(url: url, accessMode: .readOnly)
+
+        XCTAssertThrowsError(try reader.insert(entry(content: "must not be written"))) { error in
+            guard let databaseError = error as? DatabaseError else {
+                return XCTFail("Expected a GRDB DatabaseError, got \(error)")
+            }
+            XCTAssertEqual(databaseError.resultCode, .SQLITE_READONLY)
+        }
+
+        XCTAssertEqual(try writer.entryCount(), 0)
+    }
+
+    func testReadOnlyConnectionDoesNotCreateMissingDatabase() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clipster-read-only-missing-\(UUID().uuidString)")
+        let url = directory.appendingPathComponent("history.db")
+
+        XCTAssertThrowsError(try ClipsterDatabase(url: url, accessMode: .readOnly))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
     // MARK: - Insert
 
     func testInsertPlainText() throws {
