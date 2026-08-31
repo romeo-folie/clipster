@@ -20,7 +20,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     # Leave enough headroom for setup and the five-minute test watchdog to
     # terminate a stuck xctest process and report a useful failure.
-    timeout-minutes: 7
+    timeout-minutes: 12
     strategy:
       fail-fast: false
       matrix:
@@ -46,6 +46,14 @@ jobs:
 
       - name: Build (debug)
         working-directory: clipsterd
+        run: swift build
+
+      - name: Resolve GUI packages
+        working-directory: ClipsterApp
+        run: swift package resolve
+
+      - name: Build GUI (debug)
+        working-directory: ClipsterApp
         run: swift build
 
       - name: Run Swift tests (bounded)
@@ -85,6 +93,10 @@ jobs:
           code = proc.wait()
           sys.exit(code)
           PYEOF
+
+      - name: Run GUI Swift tests
+        working-directory: ClipsterApp
+        run: swift test
 
   # ─── Go tests — runs on arm64 (macos-14) ─────────────────────────────────────
   go-tests:

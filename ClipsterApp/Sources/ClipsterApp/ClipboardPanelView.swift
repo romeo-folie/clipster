@@ -14,6 +14,11 @@ struct ClipboardPanelView: View {
             Divider()
                 .background(Theme.separator(for: colorScheme))
 
+            if !viewModel.databaseAvailable
+                && (!viewModel.pinnedEntries.isEmpty || !viewModel.historyEntries.isEmpty) {
+                reconnectingBanner
+            }
+
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: true) {
                     LazyVStack(spacing: 0, pinnedViews: []) {
@@ -230,10 +235,36 @@ struct ClipboardPanelView: View {
 
     // MARK: - Empty State
 
+    private var reconnectingBanner: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .accessibilityHidden(true)
+            Text("History unavailable, retrying…")
+            Spacer()
+        }
+        .font(.system(size: 11, weight: .medium))
+        .foregroundColor(Theme.secondaryText(for: colorScheme))
+        .padding(.horizontal, Theme.panelPadding + 4)
+        .frame(height: 28)
+        .background(Theme.rowHover(for: colorScheme))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Clipboard history unavailable. Retrying automatically.")
+    }
+
     private var emptyState: some View {
         VStack(spacing: 12) {
             Spacer(minLength: 60)
-            if viewModel.searchQuery.isEmpty && viewModel.selectedCategory == .all {
+            if !viewModel.databaseAvailable {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 32))
+                    .foregroundColor(Theme.secondaryText(for: colorScheme))
+                Text("Connecting to clipboard history…")
+                    .font(.system(size: 14))
+                    .foregroundColor(Theme.secondaryText(for: colorScheme))
+                Text("Clipster will retry automatically")
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.secondaryText(for: colorScheme).opacity(0.7))
+            } else if viewModel.searchQuery.isEmpty && viewModel.selectedCategory == .all {
                 Image(systemName: "doc.on.clipboard")
                     .font(.system(size: 36))
                     .foregroundColor(Theme.secondaryText(for: colorScheme))

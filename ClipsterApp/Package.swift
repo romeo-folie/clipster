@@ -28,5 +28,13 @@ let package = Package(
                 "ClipsterApp.entitlements",
             ]
         ),
+        .testTarget(
+            name: "ClipsterAppTests",
+            dependencies: [
+                "ClipsterApp",
+                .product(name: "ClipsterCore", package: "clipsterd"),
+            ],
+            path: "Tests/ClipsterAppTests"
+        ),
     ]
 )

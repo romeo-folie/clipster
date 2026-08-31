@@ -16,6 +16,13 @@ import GRDB
 ///   source_name, source_confidence) are written as NULL / "high" default.
 public final class ClipsterDatabase {
 
+    /// Controls whether this process owns database setup/writes or only reads
+    /// the schema created by `clipsterd`.
+    public enum AccessMode: Equatable {
+        case readWrite
+        case readOnly
+    }
+
     // MARK: - Paths
 
     /// ~/Library/Application Support/Clipster/history.db
@@ -43,23 +50,56 @@ public final class ClipsterDatabase {
     /// - Parameters:
     ///   - url: Override DB path (used in tests). Defaults to the production path.
     ///   - config: Parsed app config. Defaults to `.default`.
-    public init(url: URL? = nil, config: ClipsterConfig = .default) throws {
+    ///   - accessMode: Read-write for the daemon owner, read-only for GUI consumers.
+    public init(
+        url: URL? = nil,
+        config: ClipsterConfig = .default,
+        accessMode: AccessMode = .readWrite
+    ) throws {
         self.clipsterConfig = config
         let target = url ?? ClipsterDatabase.dbURL
-        try Self.ensureParentDirectory(for: target)
 
         var grdbConfig = Configuration()
         grdbConfig.label = "com.clipster.database"
-        // PRAGMA journal_mode=WAL must be set *outside* any transaction.
-        // GRDB's prepareDatabase callback runs before migrations and before
-        // any transaction is opened — the correct place for this pragma.
-        grdbConfig.prepareDatabase { db in
-            try db.execute(sql: "PRAGMA journal_mode=WAL")
+
+        switch accessMode {
+        case .readWrite:
+            try Self.ensureParentDirectory(for: target)
+            // PRAGMA journal_mode=WAL must be set *outside* any transaction.
+            // GRDB's prepareDatabase callback runs before migrations and before
+            // any transaction is opened — the correct place for this pragma.
+            grdbConfig.prepareDatabase { db in
+                try db.execute(sql: "PRAGMA journal_mode=WAL")
+
+                // Keep the WAL and shared-memory companions after the writer exits.
+                // SQLite requires them for a later read-only process to open a WAL
+                // database without creating files, so this preserves GUI access
+                // while clipsterd is temporarily unavailable.
+                var persistWAL: CInt = 1
+                let resultCode = withUnsafeMutablePointer(to: &persistWAL) { flag in
+                    sqlite3_file_control(
+                        db.sqliteConnection,
+                        nil,
+                        SQLITE_FCNTL_PERSIST_WAL,
+                        flag
+                    )
+                }
+                guard resultCode == SQLITE_OK else {
+                    throw DatabaseError(resultCode: ResultCode(rawValue: resultCode))
+                }
+            }
+        case .readOnly:
+            // The GUI is a database reader, never a second setup/write owner.
+            // In particular, do not create directories, change journal mode, or
+            // run migrations from this process.
+            grdbConfig.readonly = true
         }
 
         dbQueue = try DatabaseQueue(path: target.path, configuration: grdbConfig)
-        try applyMigrations()
-        logger.info("Database opened at: \(target.path)")
+        if accessMode == .readWrite {
+            try applyMigrations()
+        }
+        logger.info("Database opened (\(accessMode == .readOnly ? "read-only" : "read-write")) at: \(target.path)")
     }
 
     // MARK: - Migrations

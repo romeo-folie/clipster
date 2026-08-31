@@ -13,17 +13,28 @@ final class ClipboardViewModel: ObservableObject {
     @Published var historyEntries: [ClipboardEntry] = []
     @Published var databaseAvailable = false
 
+    private let databaseFactory: () throws -> ClipsterDatabase
+    private let refreshQueue = DispatchQueue(label: "com.clipster.gui.history-refresh", qos: .userInitiated)
+    private let databaseLock = NSLock()
     private var db: ClipsterDatabase?
     private var refreshTimer: Timer?
+    private var lastDatabaseError: String?
     private let rowThumbnailCache = NSCache<NSString, NSImage>()
     private let expandedPreviewCache = NSCache<NSString, NSImage>()
 
-    init() {
+    init(
+        databaseFactory: @escaping () throws -> ClipsterDatabase = {
+            try ClipsterDatabase(accessMode: .readOnly)
+        },
+        autoRefreshInterval: TimeInterval? = 2.0
+    ) {
+        self.databaseFactory = databaseFactory
         rowThumbnailCache.countLimit = 400
         expandedPreviewCache.countLimit = 200
-        openDatabase()
         refresh()
-        startAutoRefresh()
+        if let autoRefreshInterval {
+            startAutoRefresh(interval: autoRefreshInterval)
+        }
     }
 
     deinit {
@@ -73,7 +84,8 @@ final class ClipboardViewModel: ObservableObject {
 
     /// Fetch thumbnail JPEG data for an image entry, or nil if unavailable.
     func thumbnailData(for id: String) -> Data? {
-        try? db?.thumbnail(for: id)
+        guard let db = cachedDatabase() else { return nil }
+        return try? db.thumbnail(for: id)
     }
 
     /// Fetch small image used in list-row icon slot (fast path).
@@ -157,23 +169,34 @@ final class ClipboardViewModel: ObservableObject {
 
     // MARK: - Database
 
-    private func openDatabase() {
-        do {
-            // Open read-only against the daemon's database.
-            db = try ClipsterDatabase()
-            databaseAvailable = true
-        } catch {
-            db = nil
-            databaseAvailable = false
-            // No sample data fallback — show empty state with daemon-not-running message.
-        }
+    private func openDatabase() throws -> ClipsterDatabase {
+        if let db = cachedDatabase() { return db }
+
+        let opened = try databaseFactory()
+        setCachedDatabase(opened)
+        return opened
+    }
+
+    private func cachedDatabase() -> ClipsterDatabase? {
+        databaseLock.lock()
+        defer { databaseLock.unlock() }
+        return db
+    }
+
+    private func setCachedDatabase(_ database: ClipsterDatabase?) {
+        databaseLock.lock()
+        db = database
+        databaseLock.unlock()
     }
 
     func refresh(resetSelection: Bool = false) {
-        guard let db = db else { return }
-        // DB reads happen on a background queue; UI updates are dispatched to main.
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        // A single queue serializes timer refreshes, reconnects, and explicit
+        // refreshes after writes. If opening or reading fails, the next refresh
+        // retries instead of leaving the view model permanently disconnected.
+        refreshQueue.async { [weak self] in
+            guard let self else { return }
             do {
+                let db = try self.openDatabase()
                 let pinned = try db.listPinned()
                 let history = try db.list(limit: 200)
                 let pinnedEntries = pinned.map { ClipboardEntry(from: $0, isPinned: true) }
@@ -181,25 +204,43 @@ final class ClipboardViewModel: ObservableObject {
                     .filter { !$0.isPinned }
                     .map { ClipboardEntry(from: $0, isPinned: false) }
                 // Pre-warm thumbnail cache before publishing so rows render instantly.
-                self?.prefetchThumbnails(for: pinnedEntries + historyEntries)
+                self.prefetchThumbnails(for: pinnedEntries + historyEntries)
+                if self.lastDatabaseError != nil {
+                    logger.info("Clipboard history database connection restored")
+                    self.lastDatabaseError = nil
+                }
                 DispatchQueue.main.async {
-                    self?.pinnedEntries = pinnedEntries
-                    self?.historyEntries = historyEntries
+                    self.databaseAvailable = true
+                    self.pinnedEntries = pinnedEntries
+                    self.historyEntries = historyEntries
                     if resetSelection {
-                        self?.selectedID = self?.filteredPinned.first?.id
-                            ?? self?.filteredHistory.first?.id
+                        self.selectedID = self.filteredPinned.first?.id
+                            ?? self.filteredHistory.first?.id
                     }
                 }
             } catch {
-                // Refresh failed — keep existing data.
+                self.setCachedDatabase(nil)
+                self.logDatabaseFailure("refresh", error: error)
+                DispatchQueue.main.async {
+                    // Retain last-known entries, but distinguish an unavailable
+                    // database from a genuinely empty clipboard history.
+                    self.databaseAvailable = false
+                }
             }
         }
     }
 
-    private func startAutoRefresh() {
-        // Poll every 2 seconds for new entries. The timer fires on the main RunLoop
+    private func logDatabaseFailure(_ operation: String, error: Error) {
+        let description = String(describing: error)
+        guard description != lastDatabaseError else { return }
+        lastDatabaseError = description
+        logger.warn("Clipboard history database \(operation) failed; retrying automatically: \(description)")
+    }
+
+    private func startAutoRefresh(interval: TimeInterval) {
+        // The timer fires on the main RunLoop
         // but refresh() dispatches work to a background queue.
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             self?.refresh()
         }
     }
